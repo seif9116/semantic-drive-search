@@ -82,10 +82,36 @@ uv pip install -e .
 
 This installs the `sds` command. You can also run commands directly with `python cli.py`.
 
+### First run — setup wizard
+
+Run `sds` with no arguments. If no configuration exists it launches an interactive wizard that asks for your API keys and database URL, then saves them to `~/.sds/settings.json` (chmod 600):
+
+```
+  Welcome to Semantic Drive Search
+  ─────────────────────────────────────
+  No configuration found. Let's get you set up.
+
+  Gemini API Key
+  From https://aistudio.google.com/app/apikey
+  › ****
+
+  Google OAuth Client ID
+  ...
+
+  ✓ Settings saved to ~/.sds/settings.json
+```
+
+Run `sds setup` at any time to update credentials. Run `sds status` to see what's configured.
+
+Settings are loaded in priority order: `~/.sds/settings.json` → environment variables → `.env` file. Existing `.env`-based setups keep working without changes.
+
 ### Commands
 
 | Command | Description |
 |---------|-------------|
+| `sds` | Setup wizard (first run) or status (already configured) |
+| `sds setup` | Re-run the setup wizard to update credentials |
+| `sds status` | Show current configuration (secrets masked) |
 | `sds list-folders` | List all folders that have been indexed |
 | `sds index <folder_id>` | Index a new Google Drive folder |
 | `sds search <query> <folder_id>` | Search indexed images/videos with natural language |
@@ -94,6 +120,9 @@ This installs the `sds` command. You can also run commands directly with `python
 ### Workflow
 
 ```bash
+# 0. Configure credentials (first time only)
+sds
+
 # 1. See what's available
 sds list-folders
 

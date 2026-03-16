@@ -5,39 +5,203 @@ Exposes search, indexing, and folder management as subcommands.
 Claude agents can call these directly via Bash and parse the JSON output.
 
 Usage:
-  python cli.py list-folders
-  python cli.py index <folder_id>
-  python cli.py search <query> <folder_id> [--limit N]
-  python cli.py get-url <file_id>
+  sds                          → setup wizard (if unconfigured) or status
+  sds setup                    → run setup wizard
+  sds list-folders
+  sds index <folder_id>
+  sds search <query> <folder_id> [--limit N]
+  sds get-url <file_id>
 """
 
 import json
 import re
 import time
+from pathlib import Path
 
 import typer
 
-from backend.config import settings
-from backend.vector_store import VectorStore
-from backend import embeddings, auth, drive
+DRIVE_FILE_URL = "https://drive.google.com/file/d/{file_id}/view"
+SDS_DIR = Path.home() / ".sds"
+SDS_SETTINGS = SDS_DIR / "settings.json"
 
-app = typer.Typer(help="Semantic Drive Search CLI — search Google Drive images with natural language.")
+# ── Setup helpers ─────────────────────────────────────────────────────────────
 
-store = VectorStore(
-    database_url=settings.database_url,
-    dimensions=settings.embedding_dimensions,
+_FIELDS = [
+    {
+        "key": "GOOGLE_API_KEY",
+        "label": "Google (Gemini) API Key",
+        "hint": "From https://aistudio.google.com/app/apikey",
+        "secret": True,
+    },
+    {
+        "key": "GOOGLE_CLIENT_ID",
+        "label": "Google OAuth Client ID",
+        "hint": "From Google Cloud Console → APIs & Services → Credentials",
+        "secret": False,
+    },
+    {
+        "key": "GOOGLE_CLIENT_SECRET",
+        "label": "Google OAuth Client Secret",
+        "hint": "Same credentials page as Client ID",
+        "secret": True,
+    },
+    {
+        "key": "DATABASE_URL",
+        "label": "PostgreSQL Database URL",
+        "hint": "e.g. postgresql://user:pass@localhost:5432/semantic_search",
+        "secret": False,
+        "default": "postgresql://localhost:5432/semantic_search",
+    },
+]
+
+
+def _load_saved() -> dict:
+    if SDS_SETTINGS.exists():
+        try:
+            return json.loads(SDS_SETTINGS.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def _save(data: dict) -> None:
+    SDS_DIR.mkdir(parents=True, exist_ok=True)
+    SDS_SETTINGS.write_text(json.dumps(data, indent=2))
+    SDS_SETTINGS.chmod(0o600)
+
+
+def _is_configured() -> bool:
+    saved = _load_saved()
+    return bool(saved.get("GOOGLE_API_KEY") and saved.get("DATABASE_URL"))
+
+
+def _mask(value: str) -> str:
+    if not value:
+        return "(not set)"
+    if len(value) <= 8:
+        return "*" * len(value)
+    return value[:4] + "*" * (len(value) - 8) + value[-4:]
+
+
+# ── App ───────────────────────────────────────────────────────────────────────
+
+app = typer.Typer(
+    help="Semantic Drive Search — search Google Drive images with natural language.",
+    invoke_without_command=True,
+    no_args_is_help=False,
 )
 
-DRIVE_FILE_URL = "https://drive.google.com/file/d/{file_id}/view"
+
+@app.callback()
+def _default(ctx: typer.Context) -> None:
+    """Run setup wizard when invoked with no subcommand."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    if _is_configured():
+        _cmd_status()
+    else:
+        typer.echo("")
+        typer.echo("  Welcome to Semantic Drive Search")
+        typer.echo("  ─────────────────────────────────────")
+        typer.echo("  No configuration found. Let's get you set up.")
+        typer.echo("")
+        _run_setup()
 
 
-def _extract_folder_id(folder_input: str) -> str:
-    """Extract a folder ID from a Google Drive URL or return the raw ID."""
-    match = re.search(r"folders/([a-zA-Z0-9_-]+)", folder_input)
-    if match:
-        return match.group(1)
-    return folder_input.strip()
+# ── Setup command ─────────────────────────────────────────────────────────────
 
+def _run_setup() -> None:
+    saved = _load_saved()
+
+    typer.echo("  You will need:")
+    typer.echo("    • A Google Gemini API key (for embeddings)")
+    typer.echo("    • Google OAuth credentials (for Drive access)")
+    typer.echo("    • A PostgreSQL connection string (with pgvector)")
+    typer.echo("")
+    typer.echo("  Press Enter to keep an existing value. Ctrl+C to quit.")
+    typer.echo("")
+
+    updated: dict = dict(saved)
+
+    for field in _FIELDS:
+        key = field["key"]
+        current = saved.get(key, field.get("default", ""))
+        display_current = _mask(current) if field.get("secret") else (current or "(not set)")
+
+        typer.echo(f"  {field['label']}")
+        typer.echo(f"  {field['hint']}")
+        if current:
+            typer.echo(f"  Current: {display_current}")
+
+        prompt_text = "  › "
+        if field.get("secret"):
+            value = typer.prompt(prompt_text, default="", hide_input=True, show_default=False)
+        else:
+            value = typer.prompt(prompt_text, default=current or "", show_default=bool(current))
+
+        if value:
+            updated[key] = value
+        elif current:
+            updated[key] = current  # keep existing
+
+        typer.echo("")
+
+    _save(updated)
+
+    typer.echo("  ✓ Settings saved to ~/.sds/settings.json")
+    typer.echo("")
+    typer.echo("  Next steps:")
+    typer.echo("    1. Run `uvicorn backend.main:app` and visit /auth/login to")
+    typer.echo("       complete Google OAuth (creates token.json).")
+    typer.echo("    2. Run `sds index <folder_id>` to index a Drive folder.")
+    typer.echo("    3. Run `sds search \"your query\" <folder_id>` to search.")
+    typer.echo("")
+
+
+@app.command()
+def setup() -> None:
+    """Run the interactive setup wizard to configure API keys and database."""
+    typer.echo("")
+    typer.echo("  Semantic Drive Search — Setup")
+    typer.echo("  ─────────────────────────────────────")
+    typer.echo("")
+    _run_setup()
+
+
+# ── Status command ─────────────────────────────────────────────────────────────
+
+def _cmd_status() -> None:
+    saved = _load_saved()
+
+    typer.echo("")
+    typer.echo("  Semantic Drive Search")
+    typer.echo("  ─────────────────────────────────────")
+    typer.echo("")
+
+    rows = [
+        ("Gemini API Key", _mask(saved.get("GOOGLE_API_KEY", ""))),
+        ("OAuth Client ID", saved.get("GOOGLE_CLIENT_ID", "(not set)")),
+        ("OAuth Client Secret", _mask(saved.get("GOOGLE_CLIENT_SECRET", ""))),
+        ("Database URL", saved.get("DATABASE_URL", "(not set)")),
+    ]
+    for label, val in rows:
+        status = "✓" if val and val != "(not set)" else "✗"
+        typer.echo(f"  {status}  {label}: {val}")
+
+    typer.echo("")
+    typer.echo("  Commands: search · list-folders · index · get-url · setup")
+    typer.echo("  Run `sds --help` for full usage.")
+    typer.echo("")
+
+
+@app.command()
+def status() -> None:
+    """Show current configuration status."""
+    _cmd_status()
+
+
+# ── Search command ─────────────────────────────────────────────────────────────
 
 @app.command()
 def search(
@@ -46,18 +210,19 @@ def search(
     limit: int = typer.Option(10, "--limit", "-n", help="Maximum number of results to return."),
 ) -> None:
     """Search indexed Google Drive images and videos using a natural language query."""
+    from backend.config import settings
+    from backend.vector_store import VectorStore
+    from backend import embeddings
+
     folder_id = _extract_folder_id(folder_id)
 
+    store = VectorStore(database_url=settings.database_url, dimensions=settings.embedding_dimensions)
     query_embedding = embeddings.embed_text_with_retry(query)
     if query_embedding is None:
         typer.echo(json.dumps({"error": "Failed to generate query embedding. Try again shortly."}))
         raise typer.Exit(1)
 
-    raw_results = store.search(
-        folder_id=folder_id,
-        query_embedding=query_embedding,
-        limit=limit,
-    )
+    raw_results = store.search(folder_id=folder_id, query_embedding=query_embedding, limit=limit)
 
     results = [
         {
@@ -73,9 +238,15 @@ def search(
     typer.echo(json.dumps({"query": query, "folder_id": folder_id, "results": results}, indent=2))
 
 
+# ── List-folders command ───────────────────────────────────────────────────────
+
 @app.command(name="list-folders")
 def list_folders() -> None:
     """List all Google Drive folders that have been indexed for semantic search."""
+    from backend.config import settings
+    from backend.vector_store import VectorStore
+
+    store = VectorStore(database_url=settings.database_url, dimensions=settings.embedding_dimensions)
     folder_ids = store.list_folders()
 
     folders = [
@@ -86,6 +257,8 @@ def list_folders() -> None:
     typer.echo(json.dumps({"folders": folders}, indent=2))
 
 
+# ── Index command ──────────────────────────────────────────────────────────────
+
 @app.command()
 def index(
     folder_id: str = typer.Argument(..., help="Google Drive folder ID or full folder URL to index."),
@@ -95,7 +268,12 @@ def index(
     Already-indexed files are skipped automatically. Supported formats:
     JPEG, PNG, GIF, WebP images and MP4, QuickTime, AVI, WebM videos.
     """
+    from backend.config import settings
+    from backend.vector_store import VectorStore
+    from backend import embeddings, auth, drive
+
     folder_id = _extract_folder_id(folder_id)
+    store = VectorStore(database_url=settings.database_url, dimensions=settings.embedding_dimensions)
 
     creds = auth.get_credentials()
     if creds is None:
@@ -173,12 +351,23 @@ def index(
     typer.echo(json.dumps(summary, indent=2))
 
 
+# ── Get-url command ────────────────────────────────────────────────────────────
+
 @app.command(name="get-url")
 def get_url(
     file_id: str = typer.Argument(..., help="The Google Drive file ID."),
 ) -> None:
     """Get the Google Drive viewing URL for a file."""
     typer.echo(DRIVE_FILE_URL.format(file_id=file_id))
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _extract_folder_id(folder_input: str) -> str:
+    match = re.search(r"folders/([a-zA-Z0-9_-]+)", folder_input)
+    if match:
+        return match.group(1)
+    return folder_input.strip()
 
 
 if __name__ == "__main__":
