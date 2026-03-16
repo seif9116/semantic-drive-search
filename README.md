@@ -69,44 +69,47 @@ uvicorn backend.main:app --reload
 
 Open http://localhost:8000
 
-## MCP Server (Claude Integration)
+## CLI (Claude Integration)
 
-An MCP server is included so Claude agents can search your Drive images directly. This is the primary way to use this tool when building websites with Claude.
+A CLI is included so Claude agents can search your Drive images directly via shell commands. All commands output JSON, making them easy to parse programmatically.
 
-### Add to Claude Code
+### Install the CLI
 
-Add to your `.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "semantic-drive-search": {
-      "command": "/path/to/semantic-drive-search/.venv/bin/python3",
-      "args": ["/path/to/semantic-drive-search/mcp_server.py"]
-    }
-  }
-}
+```bash
+uv pip install -e .
+# or: pip install -e .
 ```
 
-### MCP Tools
+This installs the `sds` command. You can also run commands directly with `python cli.py`.
 
-| Tool | Description |
-|------|-------------|
-| `search_images` | Search indexed images/videos with natural language (e.g., "sunset over mountains") |
-| `list_indexed_folders` | List all folders that have been indexed |
-| `index_folder` | Index a new Google Drive folder |
-| `get_image_url` | Get the Drive URL for a file ID |
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `sds list-folders` | List all folders that have been indexed |
+| `sds index <folder_id>` | Index a new Google Drive folder |
+| `sds search <query> <folder_id>` | Search indexed images/videos with natural language |
+| `sds get-url <file_id>` | Get the Drive URL for a file ID |
 
 ### Workflow
 
-```
-1. list_indexed_folders()          → see what's available
-2. index_folder("FOLDER_ID")      → index a new folder (if needed)
-3. search_images("sunset", "ID")  → find matching images
-4. get_image_url("FILE_ID")       → get shareable link
+```bash
+# 1. See what's available
+sds list-folders
+
+# 2. Index a new folder (if needed)
+sds index "https://drive.google.com/drive/folders/FOLDER_ID"
+
+# 3. Find matching images
+sds search "sunset over mountains" FOLDER_ID
+
+# 4. Get a shareable link
+sds get-url FILE_ID
 ```
 
-See [claude-skill.md](claude-skill.md) for full usage examples and setup details.
+### Claude Code integration
+
+Add a skill entry in `claude-skill.md` and tell Claude to use `sds` (or `python /path/to/cli.py`) via Bash. See [claude-skill.md](claude-skill.md) for full usage examples.
 
 ## REST API
 
@@ -154,7 +157,7 @@ Response:
 - **Backend:** FastAPI
 - **Embeddings:** Gemini Embedding 2 (`gemini-embedding-2-preview`, 768 dimensions)
 - **Vector store:** PostgreSQL + pgvector (cosine similarity)
-- **MCP Server:** FastMCP (Python MCP SDK)
+- **CLI:** Typer
 - **Drive:** Google Drive API v3 (read-only)
 - **Frontend:** Vanilla HTML/CSS/JS with Instrument Serif + DM Sans
 
