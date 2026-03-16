@@ -1,0 +1,12 @@
+{
+  "name": "semantic-drive-search",
+  "version": "0.2.0",
+  "description": "Search Google Drive images and videos using natural language, powered by Gemini Embedding 2 and pgvector",
+  "author": {
+    "name": "seif9116",
+    "url": "https://github.com/seif9116"
+  },
+  "repository": "https://github.com/seif9116/semantic-drive-search",
+  "license": "MIT",
+  "keywords": ["google-drive", "image-search", "semantic-search", "gemini", "embeddings"]
+}
