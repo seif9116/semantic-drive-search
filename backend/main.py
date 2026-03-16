@@ -268,6 +268,20 @@ async def get_thumbnail(file_id: str):
     if not creds:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
+        # Fetch the small CDN-hosted thumbnail instead of downloading the full file
+        service = drive.get_drive_service(creds)
+        file_meta = service.files().get(
+            fileId=file_id, fields="thumbnailLink", supportsAllDrives=True,
+        ).execute()
+        thumbnail_link = file_meta.get("thumbnailLink")
+        if thumbnail_link:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(thumbnail_link, follow_redirects=True, timeout=10)
+                if resp.status_code == 200:
+                    content_type = resp.headers.get("content-type", "image/jpeg")
+                    return Response(content=resp.content, media_type=content_type)
+        # Fallback: download the full file if no thumbnail available
         content = drive.download_file(creds, file_id)
         return Response(content=content, media_type="image/jpeg")
     except Exception as e:

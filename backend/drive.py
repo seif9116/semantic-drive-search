@@ -1,4 +1,5 @@
 import io
+import time
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from google.oauth2.credentials import Credentials
@@ -42,6 +43,9 @@ def list_media_files(creds: Credentials, folder_id: str) -> list[dict]:
             size = int(f.get("size", 0))
             mime = f.get("mimeType", "")
 
+            # Skip empty files (no content to embed)
+            if size == 0:
+                continue
             # Skip files that are too large
             if mime in image_types and size > settings.max_image_size:
                 continue
@@ -85,18 +89,39 @@ def list_media_files(creds: Credentials, folder_id: str) -> list[dict]:
     return all_files
 
 
-def download_file(creds: Credentials, file_id: str) -> bytes:
-    """Download a file's content from Drive."""
-    service = get_drive_service(creds)
-    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
-    buffer = io.BytesIO()
-    downloader = MediaIoBaseDownload(buffer, request)
+def download_file(creds: Credentials, file_id: str, max_retries: int = 3) -> bytes:
+    """Download a file's content from Drive with retry on transient errors."""
+    for attempt in range(max_retries):
+        try:
+            service = get_drive_service(creds)
+            request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
+            buffer = io.BytesIO()
+            downloader = MediaIoBaseDownload(buffer, request)
 
-    done = False
-    while not done:
-        _, done = downloader.next_chunk()
+            done = False
+            while not done:
+                _, done = downloader.next_chunk()
 
-    return buffer.getvalue()
+            return buffer.getvalue()
+        except Exception as e:
+            err = str(e).lower()
+            is_transient = any(s in err for s in [
+                "unable to find the server",
+                "name resolution",
+                "connection refused",
+                "connection reset",
+                "connection aborted",
+                "timed out",
+                "timeout",
+                "503",
+                "502",
+                "500",
+            ])
+            if is_transient and attempt < max_retries - 1:
+                wait = 2 ** (attempt + 1)
+                time.sleep(wait)
+                continue
+            raise
 
 
 def create_folder(creds: Credentials, name: str, parent_id: str) -> str:
