@@ -11,7 +11,7 @@ import re
 import time
 from datetime import datetime
 
-NAMING_MODEL = "gemini-2.0-flash"
+NAMING_MODEL = "gemini-3-flash-preview"
 SAMPLE_SIZE = 3   # representative images sent to Gemini per cluster
 
 
