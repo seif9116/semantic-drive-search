@@ -35,7 +35,7 @@ class Settings:
     google_client_id: str = _get("GOOGLE_CLIENT_ID", "", _sds)
     google_client_secret: str = _get("GOOGLE_CLIENT_SECRET", "", _sds)
     app_secret_key: str = _get("APP_SECRET_KEY", "change-me-in-production", _sds)
-    database_url: str = _get("DATABASE_URL", "postgresql://localhost:5432/semantic_search", _sds)
+    database_url: str = _get("DATABASE_URL", "postgresql:///semantic_search", _sds)
     embedding_dimensions: int = int(_get("EMBEDDING_DIMENSIONS", "768", _sds))
     redirect_uri: str = _get("REDIRECT_URI", "http://localhost:8000/auth/callback", _sds)
     max_image_size: int = 20 * 1024 * 1024  # 20MB

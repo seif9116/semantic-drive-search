@@ -437,7 +437,7 @@ def _run_setup() -> None:
     val = _prompt_field(
         "Database URL",
         "e.g. postgresql://user:pass@localhost:5432/semantic_search",
-        current=saved.get("DATABASE_URL", "postgresql://localhost:5432/semantic_search"),
+        current=saved.get("DATABASE_URL", "postgresql:///semantic_search"),
         secret=False,
     )
     if val:
@@ -536,22 +536,52 @@ def _test_gemini(api_key: str) -> None:
     client.models.list()
 
 
+def _find_free_port() -> int:
+    """Find a free port, preferring 8000."""
+    import socket
+    for port in [8000, 8001, 8002, 8888, 9000]:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            continue
+    # Fallback: let OS pick
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def _run_oauth_flow() -> None:
     """Start a temp server, open browser for OAuth, wait for token, exit."""
     import threading
     import uvicorn
     from backend.main import app as fastapi_app
     from backend import auth as auth_module
+    from backend.config import settings
+
+    port = _find_free_port()
+
+    # Update redirect URI to match the port we're using
+    auth_module.settings = type(settings)(
+        **{**settings.__dict__, "redirect_uri": f"http://localhost:{port}/auth/callback"}
+    )
 
     console.print("  [bold]Starting OAuth server...[/]")
     console.print()
-    console.print("  [cyan]→[/] Opening browser for Google sign-in...")
+    console.print(f"  [cyan]→[/] Opening [link=http://localhost:{port}/auth/login]http://localhost:{port}/auth/login[/link] in your browser")
     console.print("  [dim]  Sign in and allow Drive access. This will complete automatically.[/]")
     console.print()
 
+    if port != 8000:
+        console.print(f"  [yellow]![/] Using port [bold]{port}[/] (8000 was busy)")
+        console.print(f"  [yellow]![/] Make sure [bold]http://localhost:{port}/auth/callback[/]")
+        console.print(f"      is in your OAuth redirect URIs in Google Cloud Console")
+        console.print()
+
     def _open_browser():
         time.sleep(1.5)
-        webbrowser.open("http://localhost:8000/auth/login")
+        webbrowser.open(f"http://localhost:{port}/auth/login")
 
     threading.Thread(target=_open_browser, daemon=True).start()
 
@@ -576,7 +606,7 @@ def _run_oauth_flow() -> None:
     threading.Thread(target=_watch_for_token, daemon=True).start()
 
     try:
-        uvicorn.run(fastapi_app, host="127.0.0.1", port=8000, log_level="error")
+        uvicorn.run(fastapi_app, host="127.0.0.1", port=port, log_level="error")
     except KeyboardInterrupt:
         pass
 
