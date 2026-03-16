@@ -88,7 +88,7 @@ def list_media_files(creds: Credentials, folder_id: str) -> list[dict]:
 def download_file(creds: Credentials, file_id: str) -> bytes:
     """Download a file's content from Drive."""
     service = get_drive_service(creds)
-    request = service.files().get_media(fileId=file_id, **_SHARED)
+    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
     buffer = io.BytesIO()
     downloader = MediaIoBaseDownload(buffer, request)
 
