@@ -193,7 +193,10 @@ async def search(
     if not creds:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    query_embedding = embeddings.embed_text_with_retry(q)
+    try:
+        query_embedding = embeddings.embed_text_with_retry(q)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Embedding service unavailable: {e}")
     if query_embedding is None:
         raise HTTPException(status_code=500, detail="Failed to generate query embedding")
 
