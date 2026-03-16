@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Drive Search</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --void: #06080f;
+            --deep: #0b0f1a;
+            --surface: #111827;
+            --surface-raised: #1a2236;
+            --border: rgba(148, 163, 194, 0.08);
+            --border-hover: rgba(148, 163, 194, 0.16);
+            --text: #e2e8f0;
+            --text-muted: #64748b;
+            --text-dim: #475569;
+            --accent: #60a5fa;
+            --accent-glow: rgba(96, 165, 250, 0.15);
+            --accent-bright: #93c5fd;
+            --amber: #fbbf24;
+            --amber-dim: rgba(251, 191, 36, 0.12);
+            --success: #34d399;
+            --error: #f87171;
+            --glass: rgba(17, 24, 39, 0.7);
+            --glass-border: rgba(148, 163, 194, 0.06);
+            --radius: 12px;
+            --radius-lg: 20px;
+            --radius-sm: 8px;
+        }
+
+        html { font-size: 16px; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--void);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Starfield background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(1.5px 1.5px at 20% 30%, rgba(255,255,255,0.08), transparent),
+                radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,0.05), transparent),
+                radial-gradient(1.2px 1.2px at 60% 20%, rgba(255,255,255,0.06), transparent),
+                radial-gradient(1px 1px at 80% 50%, rgba(255,255,255,0.04), transparent),
+                radial-gradient(1.5px 1.5px at 10% 80%, rgba(255,255,255,0.07), transparent),
+                radial-gradient(1px 1px at 90% 10%, rgba(255,255,255,0.05), transparent),
+                radial-gradient(1.3px 1.3px at 50% 50%, rgba(255,255,255,0.03), transparent),
+                radial-gradient(1px 1px at 30% 90%, rgba(255,255,255,0.06), transparent),
+                radial-gradient(ellipse at 50% 0%, rgba(96, 165, 250, 0.03), transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* Subtle top glow */
+        body::after {
+            content: '';
+            position: fixed;
+            top: -40%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120%;
+            height: 60%;
+            background: radial-gradient(ellipse, rgba(96, 165, 250, 0.04) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .app { position: relative; z-index: 1; }
+
+        /* ---- HEADER ---- */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.25rem 2rem;
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            background: rgba(6, 8, 15, 0.6);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .logo-mark {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 12px var(--accent), 0 0 30px rgba(96,165,250,0.2);
+            display: inline-block;
+            margin-right: 0.25rem;
+            position: relative;
+            top: -1px;
+        }
+
+        .logo h1 {
+            font-family: 'Instrument Serif', serif;
+            font-size: 1.35rem;
+            font-weight: 400;
+            letter-spacing: -0.01em;
+            color: var(--text);
+        }
+
+        .logo h1 span {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .auth-badge {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 0.35rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .auth-badge .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 6px rgba(52, 211, 153, 0.4);
+        }
+
+        .auth-badge .dot.off { background: var(--text-dim); box-shadow: none; }
+
+        /* ---- BUTTONS ---- */
+        .btn {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            padding: 0.5rem 1.1rem;
+            border-radius: 100px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            border-color: var(--border-hover);
+            background: var(--surface);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--void);
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-bright);
+            border-color: var(--accent-bright);
+            box-shadow: 0 0 20px rgba(96, 165, 250, 0.25);
+        }
+
+        .btn-danger {
+            color: var(--error);
+            border-color: rgba(248, 113, 113, 0.2);
+        }
+
+        .btn-danger:hover {
+            background: rgba(248, 113, 113, 0.08);
+            border-color: rgba(248, 113, 113, 0.3);
+        }
+
+        .btn-sm { font-size: 0.75rem; padding: 0.35rem 0.8rem; }
+
+        /* ---- MAIN CONTENT ---- */
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* ---- CTA (Unauthenticated) ---- */
+        .cta-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            text-align: center;
+            animation: fadeUp 0.8s ease both;
+        }
+
+        .cta-section h2 {
+            font-family: 'Instrument Serif', serif;
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 400;
+            line-height: 1.1;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .cta-section h2 em {
+            font-style: italic;
+            color: var(--accent);
+        }
+
+        .cta-section p {
+            color: var(--text-muted);
+            font-size: 1.05rem;
+            max-width: 440px;
+            line-height: 1.6;
+            margin-bottom: 2.5rem;
+        }
+
+        .cta-section .btn-primary {
+            font-size: 1rem;
+            padding: 0.75rem 2rem;
+        }
+
+        /* ---- WORKSPACE (Authenticated) ---- */
+        .workspace { animation: fadeUp 0.6s ease both; }
+
+        .section-label {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            margin-bottom: 0.75rem;
+        }
+
+        /* ---- FOLDER INPUT ---- */
+        .folder-input-section {
+            margin-bottom: 2rem;
+        }
+
+        .folder-input-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .folder-input-row input {
+            flex: 1;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.875rem;
+            padding: 0.65rem 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .folder-input-row input::placeholder { color: var(--text-dim); }
+        .folder-input-row input:focus { border-color: rgba(96, 165, 250, 0.3); }
+
+        /* ---- INDEXED FOLDERS ---- */
+        .folders-section { margin-bottom: 2rem; }
+
+        .folders-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .folder-chip {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 0.75rem 0.5rem 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.8125rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .folder-chip:hover { border-color: var(--border-hover); }
+
+        .folder-chip.active {
+            border-color: rgba(96, 165, 250, 0.3);
+            background: rgba(96, 165, 250, 0.06);
+        }
+
+        .folder-chip .count {
+            font-size: 0.6875rem;
+            color: var(--text-muted);
+            background: var(--surface-raised);
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+        }
+
+        .folder-chip .delete-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+            padding: 0 0.15rem;
+            transition: color 0.15s;
+        }
+
+        .folder-chip .delete-btn:hover { color: var(--error); }
+
+        /* ---- PROGRESS ---- */
+        .progress-section {
+            margin-bottom: 2rem;
+            animation: fadeUp 0.4s ease both;
+        }
+
+        .progress-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .progress-header .label {
+            font-size: 0.8125rem;
+            font-weight: 500;
+        }
+
+        .progress-header .stats {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .progress-bar-track {
+            width: 100%;
+            height: 4px;
+            background: var(--surface-raised);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 0.6rem;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+            border-radius: 2px;
+            transition: width 0.4s ease;
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
+        }
+
+        .progress-file {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* ---- SEARCH ---- */
+        .search-section { margin-bottom: 2rem; }
+
+        .search-container {
+            position: relative;
+        }
+
+        .search-container input {
+            width: 100%;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1.125rem;
+            padding: 1rem 1.25rem 1rem 3rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            outline: none;
+            transition: all 0.25s ease;
+        }
+
+        .search-container input::placeholder { color: var(--text-dim); }
+
+        .search-container input:focus {
+            border-color: rgba(96, 165, 250, 0.3);
+            box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.06), 0 4px 30px rgba(96, 165, 250, 0.05);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-dim);
+            pointer-events: none;
+        }
+
+        .search-icon svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .search-hint {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+
+        /* ---- RESULTS GRID ---- */
+        .results-section { margin-bottom: 3rem; }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .results-count {
+            font-size: 0.8125rem;
+            color: var(--text-muted);
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 1rem;
+        }
+
+        .result-card {
+            position: relative;
+            border-radius: var(--radius);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            animation: fadeUp 0.5s ease both;
+        }
+
+        .result-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--border-hover);
+        }
+
+        .result-card .image-wrap {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            overflow: hidden;
+            background: var(--deep);
+        }
+
+        .result-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+
+        .result-card:hover img {
+            transform: scale(1.05);
+        }
+
+        .result-card .similarity-badge {
+            position: absolute;
+            top: 0.6rem;
+            right: 0.6rem;
+            background: rgba(6, 8, 15, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            padding: 0.2rem 0.55rem;
+            border-radius: 100px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            color: var(--amber);
+            letter-spacing: 0.02em;
+        }
+
+        .result-card .card-info {
+            padding: 0.75rem 0.85rem;
+        }
+
+        .result-card .file-name {
+            font-size: 0.8125rem;
+            font-weight: 400;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text);
+        }
+
+        .result-card .file-type {
+            font-size: 0.6875rem;
+            color: var(--text-dim);
+            margin-top: 0.15rem;
+        }
+
+        /* Staggered animation */
+        .result-card:nth-child(1) { animation-delay: 0s; }
+        .result-card:nth-child(2) { animation-delay: 0.05s; }
+        .result-card:nth-child(3) { animation-delay: 0.1s; }
+        .result-card:nth-child(4) { animation-delay: 0.15s; }
+        .result-card:nth-child(5) { animation-delay: 0.2s; }
+        .result-card:nth-child(6) { animation-delay: 0.25s; }
+        .result-card:nth-child(7) { animation-delay: 0.3s; }
+        .result-card:nth-child(8) { animation-delay: 0.35s; }
+
+        /* ---- MODAL ---- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(6, 8, 15, 0.85);
+            backdrop-filter: blur(16px);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-content {
+            max-width: 90vw;
+            max-height: 85vh;
+            position: relative;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.open .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-content img {
+            max-width: 100%;
+            max-height: 80vh;
+            border-radius: var(--radius);
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-info {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: -2.5rem;
+            right: 0;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.8125rem;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: color 0.15s;
+        }
+
+        .modal-close:hover { color: var(--text); }
+
+        /* ---- EMPTY / LOADING STATES ---- */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 1rem;
+            color: var(--text-dim);
+        }
+
+        .empty-state p { font-size: 0.875rem; line-height: 1.6; }
+
+        .loading-pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        /* ---- ANIMATIONS ---- */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* ---- RESPONSIVE ---- */
+        @media (max-width: 768px) {
+            header { padding: 1rem; }
+            main { padding: 1.25rem; }
+            .results-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
+            .folder-input-row { flex-direction: column; }
+            .cta-section h2 { font-size: 2rem; }
+        }
+
+        /* ---- SCROLLBAR ---- */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--surface-raised); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header>
+            <div class="logo">
+                <span class="logo-mark"></span>
+                <h1>Semantic <span>Search</span></h1>
+            </div>
+            <div class="header-actions">
+                <div class="auth-badge" id="authBadge">
+                    <span class="dot off" id="authDot"></span>
+                    <span id="authText">Not connected</span>
+                </div>
+                <button class="btn btn-sm" id="authBtn" onclick="handleAuth()">Connect Drive</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Unauthenticated CTA -->
+            <section class="cta-section" id="ctaSection">
+                <h2>Find any image<br>with <em>words</em></h2>
+                <p>Connect your Google Drive and search through your images and videos using natural language. Powered by Gemini Embedding 2.</p>
+                <button class="btn btn-primary" onclick="handleAuth()">Connect Google Drive</button>
+            </section>
+
+            <!-- Authenticated Workspace -->
+            <section class="workspace hidden" id="workspace">
+                <!-- Folder Input -->
+                <div class="folder-input-section">
+                    <div class="section-label">Index a folder</div>
+                    <div class="folder-input-row">
+                        <input type="text" id="folderInput" placeholder="Paste a Google Drive folder URL or ID..." />
+                        <button class="btn btn-primary" id="indexBtn" onclick="startIndexing()">Index</button>
+                    </div>
+                </div>
+
+                <!-- Indexed Folders -->
+                <div class="folders-section hidden" id="foldersSection">
+                    <div class="section-label">Indexed folders</div>
+                    <div class="folders-grid" id="foldersGrid"></div>
+                </div>
+
+                <!-- Progress -->
+                <div class="progress-section hidden" id="progressSection">
+                    <div class="progress-card">
+                        <div class="progress-header">
+                            <span class="label loading-pulse" id="progressLabel">Indexing...</span>
+                            <span class="stats" id="progressStats">0 / 0</span>
+                        </div>
+                        <div class="progress-bar-track">
+                            <div class="progress-bar-fill" id="progressBar" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-file" id="progressFile"></div>
+                    </div>
+                </div>
+
+                <!-- Search -->
+                <div class="search-section hidden" id="searchSection">
+                    <div class="search-container">
+                        <span class="search-icon">
+                            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        </span>
+                        <input type="text" id="searchInput" placeholder="Describe what you're looking for..." />
+                    </div>
+                    <div class="search-hint" id="searchHint"></div>
+                </div>
+
+                <!-- Results -->
+                <div class="results-section hidden" id="resultsSection">
+                    <div class="results-header">
+                        <span class="results-count" id="resultsCount"></span>
+                    </div>
+                    <div class="results-grid" id="resultsGrid"></div>
+                </div>
+
+                <!-- Empty State -->
+                <div class="empty-state hidden" id="emptyState">
+                    <p>No results found. Try a different description.</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Image Modal -->
+        <div class="modal-overlay" id="modal" onclick="closeModal(event)">
+            <div class="modal-content">
+                <button class="modal-close" onclick="closeModal(event)">Close &times;</button>
+                <img id="modalImg" src="" alt="" />
+                <div class="modal-info" id="modalInfo"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
