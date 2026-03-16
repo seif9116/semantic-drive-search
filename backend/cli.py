@@ -48,29 +48,30 @@ TAGLINE = "[dim]Semantic Drive Search — find any image with words[/]"
 OAUTH_GUIDE = """
 [bold]To get OAuth credentials, follow these steps:[/]
 
-  [bold cyan]1.[/] Open Google Cloud Console:
+  [bold cyan]1.[/] [bold yellow]Enable the Google Drive API[/] (required!):
+     [link=https://console.cloud.google.com/apis/library/drive.googleapis.com]https://console.cloud.google.com/apis/library/drive.googleapis.com[/link]
+     Click [bold]"Enable"[/]. Without this, all Drive requests will fail.
+
+  [bold cyan]2.[/] Open the Credentials page:
      [link=https://console.cloud.google.com/apis/credentials]https://console.cloud.google.com/apis/credentials[/link]
 
-  [bold cyan]2.[/] Click [bold]"+ CREATE CREDENTIALS"[/] → [bold]"OAuth client ID"[/]
+  [bold cyan]3.[/] Click [bold]"+ CREATE CREDENTIALS"[/] → [bold]"OAuth client ID"[/]
 
-  [bold cyan]3.[/] If prompted, configure the OAuth consent screen:
+  [bold cyan]4.[/] If prompted, configure the OAuth consent screen:
      • User Type: [bold]External[/]
      • App name: anything (e.g. "SDS")
      • Fill in required fields, skip everything else
 
-  [bold cyan]4.[/] [bold yellow]Add yourself as a test user[/] (required!):
+  [bold cyan]5.[/] [bold yellow]Add yourself as a test user[/] (required!):
      [link=https://console.cloud.google.com/apis/credentials/consent]https://console.cloud.google.com/apis/credentials/consent[/link]
      → [bold]Test users[/] → [bold]+ ADD USERS[/] → enter your Gmail address
      [dim]Without this you'll get "access_denied" when signing in.[/]
 
-  [bold cyan]5.[/] Create OAuth Client ID:
+  [bold cyan]6.[/] Create OAuth Client ID:
      • Application type: [bold]Web application[/]
      • Authorized redirect URIs: add [bold cyan]http://localhost:8000/auth/callback[/]
 
-  [bold cyan]6.[/] Copy the [bold]Client ID[/] and [bold]Client Secret[/] shown
-
-  [bold cyan]7.[/] Make sure the [bold]Google Drive API[/] is enabled:
-     [link=https://console.cloud.google.com/apis/library/drive.googleapis.com]https://console.cloud.google.com/apis/library/drive.googleapis.com[/link]
+  [bold cyan]7.[/] Copy the [bold]Client ID[/] and [bold]Client Secret[/] shown
 """
 
 
