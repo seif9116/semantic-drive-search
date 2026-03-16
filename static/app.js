@@ -3,6 +3,11 @@ let authenticated = false;
 let activeFolderId = null;
 let searchTimeout = null;
 let eventSource = null;
+let currentOffset = 0;
+let isLoadingMore = false;
+let hasMoreResults = true;
+let currentQuery = '';
+let darkMode = localStorage.getItem('darkMode') !== 'false'; // Default to dark
 
 // ---- DOM refs ----
 const $ = (id) => document.getElementById(id);
@@ -16,7 +21,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeModal(e);
+        // Keyboard navigation in modal
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            navigateModal(e.key === 'ArrowRight' ? 1 : -1);
+        }
     });
+    
+    // Infinite scroll
+    window.addEventListener('scroll', () => {
+        if (isLoadingMore || !hasMoreResults || !currentQuery) return;
+        const scrollPos = window.innerHeight + window.scrollY;
+        const threshold = document.body.offsetHeight - 500;
+        if (scrollPos >= threshold) {
+            loadMoreResults();
+        }
+    });
+    
+    // Apply dark mode preference
+    applyDarkMode();
 });
 
 // ---- Auth ----
@@ -290,20 +312,36 @@ function onSearchInput(e) {
     if (!query) {
         $('resultsSection').classList.add('hidden');
         $('emptyState').classList.add('hidden');
+        currentQuery = '';
+        currentOffset = 0;
+        hasMoreResults = true;
         return;
     }
 
+    // Reset pagination for new search
+    currentOffset = 0;
+    hasMoreResults = true;
+    
     searchTimeout = setTimeout(() => performSearch(query), 300);
 }
 
-async function performSearch(query) {
+async function performSearch(query, append = false) {
     if (!activeFolderId) return;
+    
+    if (!append) {
+        currentQuery = query;
+        currentOffset = 0;
+    }
+    
+    isLoadingMore = true;
 
     try {
         const params = new URLSearchParams({
             q: query,
             folder_id: activeFolderId,
             limit: '20',
+            offset: currentOffset.toString(),
+            min_similarity: '0.3',
         });
 
         const resp = await fetch(`/api/search?${params}`);
@@ -319,19 +357,39 @@ async function performSearch(query) {
         }
 
         const data = await resp.json();
-        renderResults(data);
+        renderResults(data, append);
+        
+        // Update pagination state
+        if (data.results.length < 20) {
+            hasMoreResults = false;
+        } else {
+            currentOffset += 20;
+        }
     } catch (e) {
         console.error('Search error:', e);
+    } finally {
+        isLoadingMore = false;
     }
 }
 
-function renderResults(data) {
+async function loadMoreResults() {
+    if (!currentQuery || isLoadingMore || !hasMoreResults) return;
+    await performSearch(currentQuery, true);
+}
+
+function getSimilarityClass(similarity) {
+    if (similarity >= 0.8) return 'sim-high';
+    if (similarity >= 0.65) return 'sim-medium';
+    return 'sim-low';
+}
+
+function renderResults(data, append = false) {
     const section = $('resultsSection');
     const grid = $('resultsGrid');
     const empty = $('emptyState');
     const count = $('resultsCount');
 
-    if (data.results.length === 0) {
+    if (data.results.length === 0 && !append) {
         section.classList.add('hidden');
         empty.classList.remove('hidden');
         return;
@@ -339,15 +397,20 @@ function renderResults(data) {
 
     empty.classList.add('hidden');
     section.classList.remove('hidden');
-    count.textContent = `${data.results.length} result${data.results.length !== 1 ? 's' : ''} for "${data.query}"`;
+    
+    if (!append) {
+        grid.innerHTML = '';
+        count.textContent = `Results for "${data.query}"`;
+    }
 
-    grid.innerHTML = '';
-
-    data.results.forEach((r) => {
+    data.results.forEach((r, index) => {
         const card = document.createElement('div');
         card.className = 'result-card';
+        card.dataset.fileId = r.file_id;
+        card.dataset.index = currentOffset + index;
 
         const simPct = Math.round(r.similarity * 100);
+        const simClass = getSimilarityClass(r.similarity);
         const isVideo = r.mime_type.startsWith('video/');
 
         card.innerHTML = `
@@ -356,7 +419,7 @@ function renderResults(data) {
                     ? `<video src="${r.thumbnail_url}" muted preload="metadata" style="width:100%;height:100%;object-fit:cover;"></video>`
                     : `<img src="${r.thumbnail_url}" alt="${escapeHtml(r.name)}" loading="lazy" />`
                 }
-                <span class="similarity-badge">${simPct}%</span>
+                <span class="similarity-badge ${simClass}">${simPct}%</span>
             </div>
             <div class="card-info">
                 <div class="file-name" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</div>
@@ -364,16 +427,24 @@ function renderResults(data) {
             </div>
         `;
 
-        card.addEventListener('click', () => openModal(r));
+        card.addEventListener('click', () => openModal(r, data.results));
         grid.appendChild(card);
     });
 }
 
 // ---- Modal ----
-function openModal(result) {
+let currentModalResults = [];
+let currentModalIndex = 0;
+
+function openModal(result, allResults = []) {
     const modal = $('modal');
     const img = $('modalImg');
     const info = $('modalInfo');
+
+    // Store results for keyboard navigation
+    currentModalResults = allResults.length > 0 ? allResults : [result];
+    currentModalIndex = currentModalResults.findIndex(r => r.file_id === result.file_id);
+    if (currentModalIndex < 0) currentModalIndex = 0;
 
     const isVideo = result.mime_type.startsWith('video/');
     const mediaUrl = `/api/media/${result.file_id}`;
@@ -403,10 +474,25 @@ function openModal(result) {
     }
 
     const simPct = Math.round(result.similarity * 100);
-    info.textContent = `${result.name} \u2014 ${simPct}% match`;
+    const simClass = getSimilarityClass(result.similarity);
+    info.innerHTML = `
+        <span class="similarity-badge ${simClass}" style="font-size:0.875rem;padding:0.25rem 0.5rem;">${simPct}%</span>
+        &nbsp; ${escapeHtml(result.name)}
+        ${currentModalResults.length > 1 ? `<span style="color:var(--text-dim)"> (${currentModalIndex + 1}/${currentModalResults.length})</span>` : ''}
+    `;
 
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';
+}
+
+function navigateModal(direction) {
+    if (currentModalResults.length <= 1) return;
+    
+    const newIndex = currentModalIndex + direction;
+    if (newIndex < 0 || newIndex >= currentModalResults.length) return;
+    
+    currentModalIndex = newIndex;
+    openModal(currentModalResults[currentModalIndex], currentModalResults);
 }
 
 function closeModal(e) {
@@ -421,6 +507,21 @@ function closeModal(e) {
         video.pause();
         video.src = '';
     }
+    
+    currentModalResults = [];
+    currentModalIndex = 0;
+}
+
+// ---- Dark Mode ----
+function applyDarkMode() {
+    // This app is dark-mode only by design, but we keep the toggle for future light mode
+    // Currently just stores preference
+}
+
+function toggleDarkMode() {
+    darkMode = !darkMode;
+    localStorage.setItem('darkMode', darkMode);
+    applyDarkMode();
 }
 
 // ---- Utils ----

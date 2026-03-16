@@ -506,8 +506,21 @@
             border-radius: 100px;
             font-size: 0.6875rem;
             font-weight: 600;
-            color: var(--amber);
             letter-spacing: 0.02em;
+        }
+
+        /* Similarity badge color coding */
+        .result-card .similarity-badge.sim-high {
+            color: var(--success);
+            border-color: rgba(52, 211, 153, 0.2);
+        }
+        .result-card .similarity-badge.sim-medium {
+            color: var(--amber);
+            border-color: rgba(251, 191, 36, 0.2);
+        }
+        .result-card .similarity-badge.sim-low {
+            color: var(--error);
+            border-color: rgba(248, 113, 113, 0.2);
         }
 
         .result-card .card-info {

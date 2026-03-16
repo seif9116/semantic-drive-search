@@ -1,22 +1,29 @@
 import asyncio
 import json
 import re
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from hashlib import md5
 from pathlib import Path
+from time import time
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+from backend import auth, drive, embeddings
+from backend import vector_store as vs
 from backend.config import settings
-from backend.models import IndexRequest, SearchResponse, SearchResult, FolderInfo
-from backend import auth, drive, embeddings, vector_store as vs
+from backend.models import FolderInfo, IndexRequest, SearchResponse, SearchResult
 
 # Global state
 store: vs.VectorStore | None = None
 indexing_status: dict = {}
+
+# Simple in-memory cache for search results (expires after 5 minutes)
+_search_cache: dict = {}
+CACHE_TTL_SECONDS = 300
 
 
 @asynccontextmanager
@@ -52,6 +59,61 @@ app.add_middleware(
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+# --- Health Check ---
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring and load balancers."""
+    health = {
+        "status": "healthy",
+        "database": "unknown",
+        "gemini_api": "unknown",
+        "auth": "unknown",
+    }
+
+    # Check database connectivity
+    try:
+        if store is not None:
+            # Simple query to verify DB connection
+            store.list_folders()
+            health["database"] = "connected"
+        else:
+            health["database"] = "not_configured"
+            health["status"] = "degraded"
+    except Exception as e:
+        health["database"] = f"error: {str(e)[:50]}"
+        health["status"] = "unhealthy"
+
+    # Check Gemini API
+    try:
+        if settings.google_api_key:
+            # We don't want to make an actual API call on every health check
+            # Just verify the key is configured
+            health["gemini_api"] = "configured"
+        else:
+            health["gemini_api"] = "not_configured"
+            health["status"] = "degraded"
+    except Exception as e:
+        health["gemini_api"] = f"error: {str(e)[:50]}"
+
+    # Check auth status
+    try:
+        if auth.is_authenticated():
+            health["auth"] = "authenticated"
+        else:
+            health["auth"] = "not_authenticated"
+    except Exception as e:
+        health["auth"] = f"error: {str(e)[:50]}"
+
+    status_code = 200 if health["status"] == "healthy" else 503
+    return Response(
+        content=json.dumps(health),
+        media_type="application/json",
+        status_code=status_code,
+    )
 
 
 # --- Auth Routes ---
@@ -156,10 +218,8 @@ async def list_folders():
     for fid in folder_ids:
         name = fid
         if creds:
-            try:
+            with suppress(Exception):
                 name = drive.get_folder_name(creds, fid)
-            except Exception:
-                pass
         folders.append(FolderInfo(
             folder_id=fid,
             name=name,
@@ -186,12 +246,20 @@ async def search(
     q: str = Query(..., min_length=1),
     folder_id: str = Query(...),
     limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    min_similarity: float = Query(default=0.0, ge=0.0, le=1.0),
 ):
     _require_store()
     folder_id = _extract_folder_id(folder_id)
     creds = auth.get_credentials()
     if not creds:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Check cache
+    cache_key = md5(f"{q}:{folder_id}:{limit}:{offset}:{min_similarity}".encode()).hexdigest()
+    cached = _search_cache.get(cache_key)
+    if cached and time() - cached["timestamp"] < CACHE_TTL_SECONDS:
+        return cached["response"]
 
     try:
         query_embedding = embeddings.embed_text_with_retry(q)
@@ -204,6 +272,8 @@ async def search(
         folder_id=folder_id,
         query_embedding=query_embedding,
         limit=limit,
+        offset=offset,
+        min_similarity=min_similarity,
     )
 
     results = [
@@ -217,7 +287,47 @@ async def search(
         for r in raw_results
     ]
 
-    return SearchResponse(query=q, results=results)
+    response = SearchResponse(query=q, results=results)
+
+    # Cache the response
+    _search_cache[cache_key] = {"response": response, "timestamp": time()}
+
+    return response
+
+
+@app.get("/api/similar/{file_id}")
+async def find_similar(
+    file_id: str,
+    folder_id: str = Query(...),
+    limit: int = Query(default=10, ge=1, le=50),
+    min_similarity: float = Query(default=0.5, ge=0.0, le=1.0),
+):
+    """Find files similar to a given file (more like this)."""
+    _require_store()
+    folder_id = _extract_folder_id(folder_id)
+    creds = auth.get_credentials()
+    if not creds:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    raw_results = store.search_similar(
+        file_id=file_id,
+        folder_id=folder_id,
+        limit=limit,
+        min_similarity=min_similarity,
+    )
+
+    results = [
+        SearchResult(
+            file_id=r["file_id"],
+            name=r["name"],
+            mime_type=r["mime_type"],
+            similarity=r["similarity"],
+            thumbnail_url=f"/api/media/{r['file_id']}/thumbnail",
+        )
+        for r in raw_results
+    ]
+
+    return {"file_id": file_id, "results": results}
 
 
 # --- Browse Routes ---
@@ -315,11 +425,16 @@ def _extract_folder_id(folder_input: str) -> str:
 
 async def _index_folder(creds, folder_id: str):
     """Background task to index all media in a Drive folder."""
+    from backend.logging_config import get_logger
+    log = get_logger(__name__)
+
     try:
+        log.info("Starting indexing", folder_id=folder_id)
         files = drive.list_media_files(creds, folder_id)
         indexing_status[folder_id]["total_files"] = len(files)
 
         if len(files) == 0:
+            log.info("No files to index", folder_id=folder_id)
             indexing_status[folder_id]["status"] = "complete"
             return
 
@@ -332,13 +447,17 @@ async def _index_folder(creds, folder_id: str):
 
             # Skip if already indexed
             if store.has_file(folder_id, file_id):
+                log.debug("Skipping already indexed file", file_id=file_id)
                 indexing_status[folder_id]["processed"] += 1
                 continue
 
             try:
                 file_bytes = drive.download_file(creds, file_id)
 
-                embedding = embeddings.embed_image_with_retry(file_bytes, mime_type)
+                # Use the new signature that returns (embedding, file_hash)
+                embedding, file_hash = embeddings.embed_image_with_retry(
+                    file_bytes, mime_type, compute_hash=True
+                )
 
                 if embedding:
                     store.add_embedding(
@@ -351,21 +470,33 @@ async def _index_folder(creds, folder_id: str):
                             "folder_id": folder_id,
                             "size": str(f.get("size", 0)),
                         },
+                        file_hash=file_hash,
                     )
                     indexing_status[folder_id]["processed"] += 1
+                    log.debug("Indexed file", file_id=file_id)
                 else:
                     indexing_status[folder_id]["failed"] += 1
+                    log.warning("Failed to generate embedding", file_id=file_id)
 
             except Exception as e:
-                print(f"Error indexing {name}: {e}")
+                log.error("Error indexing file", file_id=file_id, error=str(e)[:100])
                 indexing_status[folder_id]["failed"] += 1
 
             # Small delay to avoid rate limits
             await asyncio.sleep(0.5)
 
+        processed = indexing_status[folder_id]["processed"]
+        failed = indexing_status[folder_id]["failed"]
+        log.info(
+            "Indexing complete",
+            folder_id=folder_id,
+            processed=processed,
+            failed=failed,
+        )
         indexing_status[folder_id]["status"] = "complete"
         indexing_status[folder_id]["current_file"] = ""
 
     except Exception as e:
+        log.error("Indexing failed", folder_id=folder_id, error=str(e)[:100])
         indexing_status[folder_id]["status"] = "error"
         indexing_status[folder_id]["current_file"] = str(e)

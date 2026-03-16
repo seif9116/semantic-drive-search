@@ -125,10 +125,11 @@ def organize_semantic(creds, folder_id: str, k: int = 10, dry_run: bool = False)
     import numpy as np
     from sklearn.cluster import KMeans
     from sklearn.metrics.pairwise import cosine_similarity
-    from backend.config import settings
-    from backend.vector_store import VectorStore
+
     from backend import drive
+    from backend.config import settings
     from backend.embeddings import get_client
+    from backend.vector_store import VectorStore
 
     store = VectorStore(database_url=settings.database_url, dimensions=settings.embedding_dimensions)
     rows = store.get_all_embeddings(folder_id)

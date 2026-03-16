@@ -12,9 +12,9 @@ import time
 
 from mcp.server.fastmcp import FastMCP
 
+from backend import auth, drive, embeddings
 from backend.config import settings
 from backend.vector_store import VectorStore
-from backend import embeddings, auth, drive
 
 mcp = FastMCP(
     "Semantic Drive Search",

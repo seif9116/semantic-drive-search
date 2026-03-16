@@ -13,6 +13,7 @@ Usage:
   sds get-url <file_id>
 """
 
+import contextlib
 import json
 import re
 import sys
@@ -21,12 +22,11 @@ import webbrowser
 from pathlib import Path
 
 import typer
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.text import Text
-from rich.table import Table
 from rich.prompt import Prompt
-from rich import box
+from rich.table import Table
 
 DRIVE_FILE_URL = "https://drive.google.com/file/d/{file_id}/view"
 SDS_DIR = Path.home() / ".sds"
@@ -168,10 +168,10 @@ def _install_postgres_ubuntu() -> None:
         console.print(f"  [dim]{label}[/]")
         result = subprocess.run(cmd, capture_output=False)
         if result.returncode != 0:
-            console.print(f"  [red]✗[/] Failed. Run manually and retry [bold]sds setup[/].")
+            console.print("  [red]✗[/] Failed. Run manually and retry [bold]sds setup[/].")
             return
 
-    console.print(f"  [green]✓[/] PostgreSQL 16 + pgvector installed")
+    console.print("  [green]✓[/] PostgreSQL 16 + pgvector installed")
     _ensure_database()
 
 
@@ -190,18 +190,18 @@ def _install_postgres_mac() -> None:
         console.print(f"  [dim]{label}[/]")
         result = subprocess.run(cmd)
         if result.returncode != 0:
-            console.print(f"  [red]✗[/] Failed. Run manually and retry [bold]sds setup[/].")
+            console.print("  [red]✗[/] Failed. Run manually and retry [bold]sds setup[/].")
             return
 
-    console.print(f"  [green]✓[/] PostgreSQL + pgvector installed and running")
+    console.print("  [green]✓[/] PostgreSQL + pgvector installed and running")
     time.sleep(2)  # Give PG a moment to start
     _ensure_database()
 
 
 def _ensure_database() -> None:
     """Check if the semantic_search database exists, create it if not."""
-    import subprocess
     import getpass
+    import subprocess
     username = getpass.getuser()
 
     # Ensure user has a postgres role
@@ -215,16 +215,16 @@ def _ensure_database() -> None:
         ["psql", "-lqt"], capture_output=True, text=True, timeout=5,
     )
     if result.returncode == 0 and "semantic_search" in result.stdout:
-        console.print(f"  [green]✓[/] Database [bold]semantic_search[/] exists")
+        console.print("  [green]✓[/] Database [bold]semantic_search[/] exists")
         return
 
     # Create it
-    console.print(f"  [dim]Creating database semantic_search...[/]")
+    console.print("  [dim]Creating database semantic_search...[/]")
     result = subprocess.run(
         ["createdb", "semantic_search"], capture_output=True, text=True,
     )
     if result.returncode == 0:
-        console.print(f"  [green]✓[/] Database [bold]semantic_search[/] created")
+        console.print("  [green]✓[/] Database [bold]semantic_search[/] created")
     else:
         # Try with sudo -u postgres
         result = subprocess.run(
@@ -232,9 +232,9 @@ def _ensure_database() -> None:
             capture_output=True, text=True,
         )
         if result.returncode == 0:
-            console.print(f"  [green]✓[/] Database [bold]semantic_search[/] created")
+            console.print("  [green]✓[/] Database [bold]semantic_search[/] created")
         else:
-            console.print(f"  [yellow]![/] Could not create database automatically")
+            console.print("  [yellow]![/] Could not create database automatically")
             console.print()
             console.print("  Run this manually:")
             console.print()
@@ -299,6 +299,7 @@ def _default(ctx: typer.Context) -> None:
 def _launch_webapp() -> None:
     """Start the web app and open it in the browser."""
     import threading
+
     import uvicorn
 
     port = _find_free_port()
@@ -309,7 +310,7 @@ def _launch_webapp() -> None:
     console.print(f"  {TAGLINE}")
     console.print()
     console.print(f"  [cyan]→[/] Running at [link=http://localhost:{port}]http://localhost:{port}[/link]")
-    console.print(f"  [dim]  Press Ctrl+C to stop.[/]")
+    console.print("  [dim]  Press Ctrl+C to stop.[/]")
     console.print()
 
     def _open_browser():
@@ -454,11 +455,11 @@ def _run_setup() -> None:
                 padding=(1, 2),
             ))
     elif pg_status == "running":
-        console.print(f"  [green]✓[/] PostgreSQL is already running")
+        console.print("  [green]✓[/] PostgreSQL is already running")
         # Check if database exists, offer to create it
         _ensure_database()
     else:
-        console.print(f"  [yellow]![/] PostgreSQL is installed but may not be running")
+        console.print("  [yellow]![/] PostgreSQL is installed but may not be running")
         console.print(Panel(
             "  Start PostgreSQL:\n\n"
             "  [bold white on grey23] sudo systemctl start postgresql [/]\n\n"
@@ -482,7 +483,7 @@ def _run_setup() -> None:
     # ── Save ──────────────────────────────────────────────────────────────
     _save(updated)
     console.print()
-    console.print(f"  [green]✓[/] Settings saved to [bold]~/.sds/settings.json[/]")
+    console.print("  [green]✓[/] Settings saved to [bold]~/.sds/settings.json[/]")
 
     # ── Verify connections ────────────────────────────────────────────────
     console.print()
@@ -496,9 +497,9 @@ def _run_setup() -> None:
     token_path = SDS_DIR / "token.json"
     has_token = token_path.exists()
     if has_token:
-        console.print(f"  [green]✓[/] Google Drive token found")
+        console.print("  [green]✓[/] Google Drive token found")
     else:
-        console.print(f"  [yellow]![/] Google Drive — needs OAuth login [dim](one-time)[/]")
+        console.print("  [yellow]![/] Google Drive — needs OAuth login [dim](one-time)[/]")
 
     # ── Step 4: Google Drive OAuth (automatic) ─────────────────────────
     console.print()
@@ -525,7 +526,7 @@ def _run_setup() -> None:
             _run_oauth_flow()
             has_token = Path("token.json").exists()
     elif has_token:
-        console.print(f"  [green]✓[/] Google Drive already authorized")
+        console.print("  [green]✓[/] Google Drive already authorized")
 
     # ── Done ─────────────────────────────────────────────────────────────
     console.print()
@@ -591,10 +592,12 @@ def _find_free_port() -> int:
 def _run_oauth_flow() -> None:
     """Start a temp server, open browser for OAuth, wait for token, exit."""
     import threading
+
     import uvicorn
-    from backend.main import app as fastapi_app
+
     from backend import auth as auth_module
     from backend.config import settings
+    from backend.main import app as fastapi_app
 
     port = _find_free_port()
 
@@ -612,7 +615,7 @@ def _run_oauth_flow() -> None:
     if port != 8000:
         console.print(f"  [yellow]![/] Using port [bold]{port}[/] (8000 was busy)")
         console.print(f"  [yellow]![/] Make sure [bold]http://localhost:{port}/auth/callback[/]")
-        console.print(f"      is in your OAuth redirect URIs in Google Cloud Console")
+        console.print("      is in your OAuth redirect URIs in Google Cloud Console")
         console.print()
 
     def _open_browser():
@@ -641,10 +644,8 @@ def _run_oauth_flow() -> None:
 
     threading.Thread(target=_watch_for_token, daemon=True).start()
 
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         uvicorn.run(fastapi_app, host="127.0.0.1", port=port, log_level="error")
-    except KeyboardInterrupt:
-        pass
 
 
 @app.command()
@@ -737,12 +738,14 @@ def status() -> None:
 def search(
     query: str = typer.Argument(..., help="Natural language description of what you are looking for."),
     folder_id: str = typer.Argument(..., help="Google Drive folder ID (or full URL) that has been indexed."),
-    limit: int = typer.Option(10, "--limit", "-n", help="Maximum number of results to return."),
+    limit: int = typer.Option(10, "--limit", "-n", "--top", help="Maximum number of results to return."),
+    min_score: float = typer.Option(0.0, "--min-score", help="Minimum similarity score (0.0-1.0) to include in results."),
+    json_output: bool = typer.Option(True, "--json/--no-json", help="Output results as JSON."),
 ) -> None:
     """Search indexed Google Drive images and videos using a natural language query."""
+    from backend import embeddings
     from backend.config import settings
     from backend.vector_store import VectorStore
-    from backend import embeddings
 
     folder_id = _extract_folder_id(folder_id)
 
@@ -752,7 +755,12 @@ def search(
         typer.echo(json.dumps({"error": "Failed to generate query embedding. Try again shortly."}))
         raise typer.Exit(1)
 
-    raw_results = store.search(folder_id=folder_id, query_embedding=query_embedding, limit=limit)
+    raw_results = store.search(
+        folder_id=folder_id,
+        query_embedding=query_embedding,
+        limit=limit,
+        min_similarity=min_score,
+    )
 
     results = [
         {
@@ -792,15 +800,22 @@ def list_folders() -> None:
 @app.command()
 def index(
     folder_id: str = typer.Argument(..., help="Google Drive folder ID or full folder URL to index."),
+    force: bool = typer.Option(False, "--force", "-f", help="Re-index all files, even if already indexed."),
+    watch: bool = typer.Option(False, "--watch", "-w", help="Watch for new files and index them periodically."),
+    watch_interval: int = typer.Option(300, "--interval", "-i", help="Watch interval in seconds (default: 300)."),
 ) -> None:
     """Index all images and videos in a Google Drive folder for semantic search.
 
     Already-indexed files are skipped automatically. Supported formats:
     JPEG, PNG, GIF, WebP images and MP4, QuickTime, AVI, WebM videos.
+
+    Use --force to re-index all files from scratch.
+    Use --watch to continuously monitor for new files.
     """
+    from backend import auth as auth_module
+    from backend import drive, embeddings
     from backend.config import settings
     from backend.vector_store import VectorStore
-    from backend import embeddings, auth as auth_module, drive
 
     folder_id = _extract_folder_id(folder_id)
     store = VectorStore(database_url=settings.database_url, dimensions=settings.embedding_dimensions)
@@ -813,72 +828,90 @@ def index(
         }))
         raise typer.Exit(1)
 
-    try:
-        files = drive.list_media_files(creds, folder_id)
-    except Exception as e:
-        typer.echo(json.dumps({"error": f"Failed to list files in folder: {e}"}))
-        raise typer.Exit(1)
-
-    total = len(files)
-    indexed = 0
-    skipped = 0
-    failed = 0
-    errors = []
-
-    supported_types = settings.supported_image_types + settings.supported_video_types
-
-    for f in files:
-        file_id = f["id"]
-        name = f["name"]
-        mime_type = f["mimeType"]
-
-        if mime_type not in supported_types:
-            skipped += 1
-            continue
-
-        if store.has_file(folder_id, file_id):
-            skipped += 1
-            continue
-
+    def do_index():
+        """Perform a single indexing pass."""
         try:
-            file_bytes = drive.download_file(creds, file_id)
-            embedding = embeddings.embed_image_with_retry(file_bytes, mime_type)
-
-            if embedding:
-                store.add_embedding(
-                    folder_id=folder_id,
-                    file_id=file_id,
-                    embedding=embedding,
-                    metadata={
-                        "name": name,
-                        "mime_type": mime_type,
-                        "folder_id": folder_id,
-                        "size": str(f.get("size", 0)),
-                    },
-                )
-                indexed += 1
-            else:
-                failed += 1
-                errors.append(f"{name}: embedding returned None")
-
+            files = drive.list_media_files(creds, folder_id)
         except Exception as e:
-            failed += 1
-            errors.append(f"{name}: {e}")
+            typer.echo(json.dumps({"error": f"Failed to list files in folder: {e}"}))
+            return None
 
-        time.sleep(0.5)
+        total = len(files)
+        indexed = 0
+        skipped = 0
+        failed = 0
+        errors = []
 
-    summary: dict = {
-        "folder_id": folder_id,
-        "total_files_found": total,
-        "newly_indexed": indexed,
-        "skipped_already_indexed": skipped,
-        "failed": failed,
-    }
+        supported_types = settings.supported_image_types + settings.supported_video_types
 
-    if errors:
-        summary["errors"] = errors[:20]
+        for f in files:
+            file_id = f["id"]
+            name = f["name"]
+            mime_type = f["mimeType"]
 
-    typer.echo(json.dumps(summary, indent=2))
+            if mime_type not in supported_types:
+                skipped += 1
+                continue
+
+            # Skip if already indexed (unless --force)
+            if not force and store.has_file(folder_id, file_id):
+                skipped += 1
+                continue
+
+            try:
+                file_bytes = drive.download_file(creds, file_id)
+                embedding, file_hash = embeddings.embed_image_with_retry(
+                    file_bytes, mime_type, compute_hash=True
+                )
+
+                if embedding:
+                    store.add_embedding(
+                        folder_id=folder_id,
+                        file_id=file_id,
+                        embedding=embedding,
+                        metadata={
+                            "name": name,
+                            "mime_type": mime_type,
+                            "folder_id": folder_id,
+                            "size": str(f.get("size", 0)),
+                        },
+                        file_hash=file_hash,
+                    )
+                    indexed += 1
+                else:
+                    failed += 1
+                    errors.append(f"{name}: embedding returned None")
+
+            except Exception as e:
+                failed += 1
+                errors.append(f"{name}: {e}")
+
+            time.sleep(0.5)
+
+        return {
+            "folder_id": folder_id,
+            "total_files_found": total,
+            "newly_indexed": indexed,
+            "skipped_already_indexed": skipped,
+            "failed": failed,
+            "errors": errors[:20] if errors else None,
+        }
+
+    if watch:
+        console.print(f"[cyan]Watching folder {folder_id}...[/] (Ctrl+C to stop)")
+        while True:
+            try:
+                result = do_index()
+                if result:
+                    console.print(f"[green]Indexed {result['newly_indexed']} new files[/]")
+                time.sleep(watch_interval)
+            except KeyboardInterrupt:
+                console.print("\n[yellow]Stopped watching.[/]")
+                break
+    else:
+        result = do_index()
+        if result:
+            typer.echo(json.dumps(result, indent=2))
 
 
 # ── Organize command ──────────────────────────────────────────────────────────
@@ -904,7 +937,8 @@ def organize(
       sds organize FOLDER_ID --mode semantic --clusters 8
       sds organize FOLDER_ID --mode semantic --dry-run
     """
-    from backend import auth as auth_module, organizer
+    from backend import auth as auth_module
+    from backend import organizer
 
     folder_id = _extract_folder_id(folder_id)
 
@@ -946,8 +980,8 @@ def browse(
     file_type: str = typer.Option("all", "--type", "-t", help="Filter: 'all', 'images', or 'videos'."),
 ) -> None:
     """List all images and videos in a Google Drive folder (no indexing needed)."""
-    from backend.config import settings
-    from backend import auth as auth_module, drive
+    from backend import auth as auth_module
+    from backend import drive
 
     folder_id = _extract_folder_id(folder_id)
 
@@ -983,6 +1017,157 @@ def browse(
         "folder_id": folder_id,
         "total_files": len(results),
         "files": results,
+    }, indent=2))
+
+
+# ── Export command ────────────────────────────────────────────────────────────
+
+@app.command()
+def export(
+    folder_id: str = typer.Argument(..., help="Google Drive folder ID or URL to export."),
+    format: str = typer.Option("json", "--format", "-f", help="Output format: 'json' or 'csv'."),
+    output: str = typer.Option(None, "--output", "-o", help="Output file path (default: stdout)."),
+) -> None:
+    """Export all indexed metadata for a folder."""
+    import csv
+
+    from backend.config import settings
+    from backend.vector_store import VectorStore
+
+    folder_id = _extract_folder_id(folder_id)
+    store = VectorStore(database_url=settings.database_url, dimensions=settings.embedding_dimensions)
+
+    rows = store.get_all_embeddings(folder_id)
+
+    if not rows:
+        typer.echo(json.dumps({"error": "No indexed files found for this folder."}))
+        raise typer.Exit(1)
+
+    # Prepare data for export
+    export_rows = [
+        {
+            "file_id": r["file_id"],
+            "name": r["name"],
+            "mime_type": r["mime_type"],
+            "drive_url": DRIVE_FILE_URL.format(file_id=r["file_id"]),
+        }
+        for r in rows
+    ]
+
+    if format == "csv":
+        writer = csv.DictWriter(sys.stdout, fieldnames=["file_id", "name", "mime_type", "drive_url"])
+        writer.writeheader()
+        writer.writerows(export_rows)
+    else:
+        typer.echo(json.dumps({
+            "folder_id": folder_id,
+            "total_files": len(export_rows),
+            "files": export_rows,
+        }, indent=2))
+
+
+# ── Stats command ──────────────────────────────────────────────────────────────
+
+@app.command()
+def stats(
+    folder_id: str = typer.Argument(..., help="Google Drive folder ID or URL to analyze."),
+) -> None:
+    """Show statistics about an indexed folder."""
+    import numpy as np
+
+    from backend.config import settings
+    from backend.vector_store import VectorStore
+
+    folder_id = _extract_folder_id(folder_id)
+    store = VectorStore(database_url=settings.database_url, dimensions=settings.embedding_dimensions)
+
+    rows = store.get_all_embeddings(folder_id)
+
+    if not rows:
+        typer.echo(json.dumps({"error": "No indexed files found for this folder."}))
+        raise typer.Exit(1)
+
+    # Compute statistics
+    total_files = len(rows)
+    images = sum(1 for r in rows if r["mime_type"].startswith("image/"))
+    videos = sum(1 for r in rows if r["mime_type"].startswith("video/"))
+
+    # Compute embedding statistics
+    embeddings_matrix = np.array([r["embedding"] for r in rows])
+    norms = np.linalg.norm(embeddings_matrix, axis=1)
+
+    # Compute pairwise similarities (sample for large datasets)
+    if total_files > 100:
+        sample_indices = np.random.choice(total_files, min(100, total_files), replace=False)
+        sample_embeddings = embeddings_matrix[sample_indices]
+        similarities = []
+        for i in range(len(sample_embeddings)):
+            for j in range(i + 1, len(sample_embeddings)):
+                sim = np.dot(sample_embeddings[i], sample_embeddings[j]) / (
+                    np.linalg.norm(sample_embeddings[i]) * np.linalg.norm(sample_embeddings[j])
+                )
+                similarities.append(sim)
+        avg_similarity = float(np.mean(similarities)) if similarities else 0.0
+    else:
+        # Full pairwise for small datasets
+        similarities = []
+        for i in range(total_files):
+            for j in range(i + 1, total_files):
+                sim = np.dot(embeddings_matrix[i], embeddings_matrix[j]) / (norms[i] * norms[j])
+                similarities.append(sim)
+        avg_similarity = float(np.mean(similarities)) if similarities else 0.0
+
+    result = {
+        "folder_id": folder_id,
+        "total_files": total_files,
+        "images": images,
+        "videos": videos,
+        "embedding_dimensions": settings.embedding_dimensions,
+        "avg_embedding_norm": round(float(np.mean(norms)), 4),
+        "avg_pairwise_similarity": round(avg_similarity, 4),
+    }
+
+    typer.echo(json.dumps(result, indent=2))
+
+
+# ── Similar command ────────────────────────────────────────────────────────────
+
+@app.command()
+def similar(
+    file_id: str = typer.Argument(..., help="File ID to find similar images for."),
+    folder_id: str = typer.Option(..., "--folder", "-f", help="Folder ID to search within."),
+    limit: int = typer.Option(10, "--limit", "-n", help="Maximum number of results."),
+    min_score: float = typer.Option(0.5, "--min-score", help="Minimum similarity score."),
+) -> None:
+    """Find files similar to a given file (more like this)."""
+    from backend.config import settings
+    from backend.vector_store import VectorStore
+
+    folder_id = _extract_folder_id(folder_id)
+    store = VectorStore(database_url=settings.database_url, dimensions=settings.embedding_dimensions)
+
+    results = store.search_similar(
+        file_id=file_id,
+        folder_id=folder_id,
+        limit=limit,
+        min_similarity=min_score,
+    )
+
+    output = [
+        {
+            "file_id": r["file_id"],
+            "name": r["name"],
+            "mime_type": r["mime_type"],
+            "similarity": r["similarity"],
+            "drive_url": DRIVE_FILE_URL.format(file_id=r["file_id"]),
+        }
+        for r in results
+    ]
+
+    typer.echo(json.dumps({
+        "source_file": file_id,
+        "folder_id": folder_id,
+        "results": output,
     }, indent=2))
 
 
