@@ -283,17 +283,47 @@ app = typer.Typer(
 
 @app.callback()
 def _default(ctx: typer.Context) -> None:
-    """Run setup wizard when invoked with no subcommand."""
+    """Launch the web app, or run setup if not configured."""
     if ctx.invoked_subcommand is not None:
         return
 
-    if _is_configured():
-        _cmd_status()
-    else:
+    if not _is_configured():
         _run_welcome()
+    else:
+        _launch_webapp()
 
 
 # ── Setup command ─────────────────────────────────────────────────────────────
+
+def _launch_webapp() -> None:
+    """Start the web app and open it in the browser."""
+    import threading
+    import uvicorn
+
+    port = _find_free_port()
+
+    console.print()
+    console.print(LOGO)
+    console.print()
+    console.print(f"  {TAGLINE}")
+    console.print()
+    console.print(f"  [cyan]→[/] Running at [link=http://localhost:{port}]http://localhost:{port}[/link]")
+    console.print(f"  [dim]  Press Ctrl+C to stop.[/]")
+    console.print()
+
+    def _open_browser():
+        time.sleep(1.5)
+        webbrowser.open(f"http://localhost:{port}")
+
+    threading.Thread(target=_open_browser, daemon=True).start()
+
+    try:
+        from backend.main import app as fastapi_app
+        uvicorn.run(fastapi_app, host="127.0.0.1", port=port, log_level="warning")
+    except KeyboardInterrupt:
+        console.print()
+        console.print("  [dim]Stopped.[/]")
+
 
 def _run_welcome() -> None:
     console.print()
