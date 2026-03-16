@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
@@ -7,6 +6,10 @@ from backend.config import settings
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 TOKEN_PATH = Path("token.json")
+
+# Store the active flow so the same instance (with code_verifier) is used
+# for both authorization URL generation and token exchange.
+_active_flow: Flow | None = None
 
 
 def get_auth_flow() -> Flow:
@@ -25,8 +28,9 @@ def get_auth_flow() -> Flow:
 
 
 def get_authorization_url() -> tuple[str, str]:
-    flow = get_auth_flow()
-    url, state = flow.authorization_url(
+    global _active_flow
+    _active_flow = get_auth_flow()
+    url, state = _active_flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
@@ -35,10 +39,12 @@ def get_authorization_url() -> tuple[str, str]:
 
 
 def exchange_code(code: str) -> Credentials:
-    flow = get_auth_flow()
+    global _active_flow
+    flow = _active_flow or get_auth_flow()
     flow.fetch_token(code=code)
     creds = flow.credentials
     _save_token(creds)
+    _active_flow = None
     return creds
 
 
