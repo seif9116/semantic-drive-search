@@ -218,5 +218,9 @@ def get_image_url(file_id: str) -> str:
     return DRIVE_FILE_URL.format(file_id=file_id)
 
 
-if __name__ == "__main__":
+def main():
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

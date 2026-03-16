@@ -14,11 +14,7 @@ Downloads all images/videos from a Drive folder, generates Gemini embeddings, an
 sds index "<folder_id_or_url>"
 ```
 
-Or:
-
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/cli.py index "<folder_id_or_url>"
-```
+Install with `pip install semantic-drive-search` if `sds` is not available.
 
 ## Arguments
 

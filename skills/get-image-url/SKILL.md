@@ -13,11 +13,7 @@ Returns the Google Drive viewing URL for a file.
 sds get-url "<file_id>"
 ```
 
-Or:
-
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/cli.py get-url "<file_id>"
-```
+Install with `pip install semantic-drive-search` if `sds` is not available.
 
 ## Output
 

@@ -13,11 +13,7 @@ Show all Drive folders that have been indexed and are ready for searching.
 sds list-folders
 ```
 
-Or:
-
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/cli.py list-folders
-```
+Install with `pip install semantic-drive-search` if `sds` is not available.
 
 ## Output
 

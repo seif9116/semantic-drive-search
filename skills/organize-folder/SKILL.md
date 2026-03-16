@@ -21,11 +21,7 @@ sds organize "<folder_id>" --mode semantic --clusters 8
 sds organize "<folder_id>" --mode semantic --dry-run
 ```
 
-Or:
-
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/cli.py organize "<folder_id>" --mode semantic --dry-run
-```
+Install with `pip install semantic-drive-search` if `sds` is not available.
 
 ## Arguments
 

@@ -8,17 +8,10 @@ All commands output JSON and are called via Bash.
 
 ## Setup
 
-Install dependencies and the `sds` CLI:
+Install the CLI globally:
 
 ```bash
-cd /path/to/semantic-drive-search
-uv pip install -e .
-```
-
-Or use `python cli.py` directly without installing:
-
-```bash
-python /path/to/semantic-drive-search/cli.py <command> [args]
+pip install semantic-drive-search
 ```
 
 ### Prerequisites

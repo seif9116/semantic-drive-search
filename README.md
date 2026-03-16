@@ -73,14 +73,13 @@ Open http://localhost:8000
 
 A CLI is included so Claude agents can search your Drive images directly via shell commands. All commands output JSON, making them easy to parse programmatically.
 
-### Install the CLI
+### Install
 
 ```bash
-uv pip install -e .
-# or: pip install -e .
+pip install semantic-drive-search
 ```
 
-This installs the `sds` command. You can also run commands directly with `python cli.py`.
+This installs the `sds` command globally.
 
 ### First run — setup wizard
 
@@ -152,9 +151,21 @@ sds organize FOLDER_ID --mode semantic --clusters 8
 sds organize FOLDER_ID --mode semantic --dry-run
 ```
 
-### Claude Code integration
+### Claude Code plugin
 
-Add a skill entry in `claude-skill.md` and tell Claude to use `sds` (or `python /path/to/cli.py`) via Bash. See [claude-skill.md](claude-skill.md) for full usage examples.
+This project is also a Claude Code plugin. Load it with:
+
+```bash
+claude --plugin-dir /path/to/semantic-drive-search
+```
+
+Or install permanently by adding to `~/.claude/settings.json`:
+
+```json
+{ "pluginDirs": ["/path/to/semantic-drive-search"] }
+```
+
+See [claude-skill.md](claude-skill.md) for full usage examples.
 
 ## REST API
 

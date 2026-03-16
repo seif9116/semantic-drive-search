@@ -21,7 +21,8 @@ dependencies = [
 ]
 
 [project.scripts]
-sds = "cli:app"
+sds = "backend.cli:app"
+sds-mcp = "backend.mcp_server:main"
 
 [project.optional-dependencies]
 dev = [

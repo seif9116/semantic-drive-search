@@ -15,11 +15,7 @@ Run via Bash:
 sds search "<natural language query>" "<folder_id>" --limit <N>
 ```
 
-If `sds` is not installed, use:
-
-```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/cli.py search "<query>" "<folder_id>" --limit <N>
-```
+Install with `pip install semantic-drive-search` if `sds` is not available.
 
 ## Arguments
 
