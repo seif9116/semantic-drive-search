@@ -53,18 +53,23 @@ OAUTH_GUIDE = """
 
   [bold cyan]2.[/] Click [bold]"+ CREATE CREDENTIALS"[/] → [bold]"OAuth client ID"[/]
 
-  [bold cyan]3.[/] If prompted, configure the consent screen first:
+  [bold cyan]3.[/] If prompted, configure the OAuth consent screen:
      • User Type: [bold]External[/]
      • App name: anything (e.g. "SDS")
-     • Add your email as a test user
+     • Fill in required fields, skip everything else
 
-  [bold cyan]4.[/] Create OAuth Client ID:
+  [bold cyan]4.[/] [bold yellow]Add yourself as a test user[/] (required!):
+     [link=https://console.cloud.google.com/apis/credentials/consent]https://console.cloud.google.com/apis/credentials/consent[/link]
+     → [bold]Test users[/] → [bold]+ ADD USERS[/] → enter your Gmail address
+     [dim]Without this you'll get "access_denied" when signing in.[/]
+
+  [bold cyan]5.[/] Create OAuth Client ID:
      • Application type: [bold]Web application[/]
      • Authorized redirect URIs: add [bold cyan]http://localhost:8000/auth/callback[/]
 
-  [bold cyan]5.[/] Copy the [bold]Client ID[/] and [bold]Client Secret[/] shown
+  [bold cyan]6.[/] Copy the [bold]Client ID[/] and [bold]Client Secret[/] shown
 
-  [bold cyan]6.[/] Make sure the [bold]Google Drive API[/] is enabled:
+  [bold cyan]7.[/] Make sure the [bold]Google Drive API[/] is enabled:
      [link=https://console.cloud.google.com/apis/library/drive.googleapis.com]https://console.cloud.google.com/apis/library/drive.googleapis.com[/link]
 """
 
