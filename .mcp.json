@@ -1,7 +1,8 @@
 {
   "mcpServers": {
     "semantic-drive-search": {
-      "command": "sds-mcp"
+      "command": "uv",
+      "args": ["run", "sds-mcp"]
     }
   }
 }

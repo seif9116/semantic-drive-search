@@ -11,6 +11,9 @@ const $ = (id) => document.getElementById(id);
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
     $('searchInput')?.addEventListener('input', onSearchInput);
+    $('folderInput')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') startIndexing();
+    });
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeModal(e);
     });
