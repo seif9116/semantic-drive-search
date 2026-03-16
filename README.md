@@ -8,7 +8,7 @@ Type "sunset over mountains" and get back the most visually similar images from 
 
 1. Connect your Google Drive via OAuth2
 2. Paste a folder URL — the app downloads each image/video and generates a 768-dimensional embedding using `gemini-embedding-2-preview`
-3. Embeddings are stored locally in ChromaDB
+3. Embeddings are stored in PostgreSQL with pgvector
 4. Type a text query — it gets embedded in the same vector space and matched against your images via cosine similarity
 5. Results are returned ranked by relevance with similarity scores
 
@@ -18,8 +18,21 @@ Type "sunset over mountains" and get back the most visually similar images from 
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- PostgreSQL with the [pgvector](https://github.com/pgvector/pgvector) extension
 - A [Google AI API key](https://aistudio.google.com/apikey) for Gemini
 - Google Cloud OAuth2 credentials with Drive API enabled
+
+### PostgreSQL setup
+
+```bash
+# Install pgvector (Ubuntu/Debian)
+sudo apt install postgresql-16-pgvector
+
+# Create the database
+createdb semantic_search
+
+# pgvector extension is created automatically on first run
+```
 
 ### Google Cloud setup
 
@@ -44,10 +57,11 @@ uv pip install -e ".[dev]"
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your API keys:
+# Edit .env:
 #   GOOGLE_API_KEY=your-gemini-api-key
 #   GOOGLE_CLIENT_ID=your-oauth-client-id
 #   GOOGLE_CLIENT_SECRET=your-oauth-client-secret
+#   DATABASE_URL=postgresql://localhost:5432/semantic_search
 
 # Run
 uvicorn backend.main:app --reload
@@ -55,9 +69,48 @@ uvicorn backend.main:app --reload
 
 Open http://localhost:8000
 
-## API
+## MCP Server (Claude Integration)
 
-The search endpoint can be called programmatically (e.g., by Claude when building websites):
+An MCP server is included so Claude agents can search your Drive images directly. This is the primary way to use this tool when building websites with Claude.
+
+### Add to Claude Code
+
+Add to your `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "semantic-drive-search": {
+      "command": "/path/to/semantic-drive-search/.venv/bin/python3",
+      "args": ["/path/to/semantic-drive-search/mcp_server.py"]
+    }
+  }
+}
+```
+
+### MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `search_images` | Search indexed images/videos with natural language (e.g., "sunset over mountains") |
+| `list_indexed_folders` | List all folders that have been indexed |
+| `index_folder` | Index a new Google Drive folder |
+| `get_image_url` | Get the Drive URL for a file ID |
+
+### Workflow
+
+```
+1. list_indexed_folders()          → see what's available
+2. index_folder("FOLDER_ID")      → index a new folder (if needed)
+3. search_images("sunset", "ID")  → find matching images
+4. get_image_url("FILE_ID")       → get shareable link
+```
+
+See [claude-skill.md](claude-skill.md) for full usage examples and setup details.
+
+## REST API
+
+The search endpoint can also be called programmatically:
 
 ```
 GET /api/search?q=sunset+over+mountains&folder_id=FOLDER_ID&limit=20
@@ -100,7 +153,8 @@ Response:
 
 - **Backend:** FastAPI
 - **Embeddings:** Gemini Embedding 2 (`gemini-embedding-2-preview`, 768 dimensions)
-- **Vector store:** ChromaDB (local persistent storage, cosine similarity)
+- **Vector store:** PostgreSQL + pgvector (cosine similarity)
+- **MCP Server:** FastMCP (Python MCP SDK)
 - **Drive:** Google Drive API v3 (read-only)
 - **Frontend:** Vanilla HTML/CSS/JS with Instrument Serif + DM Sans
 
@@ -109,6 +163,9 @@ Response:
 ```bash
 source .venv/bin/activate
 python3 -m pytest tests/ -v
+
+# Integration tests (requires DATABASE_URL)
+DATABASE_URL=postgresql://localhost:5432/semantic_search python3 -m pytest tests/ -v
 ```
 
 ## Supported formats

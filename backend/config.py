@@ -1,5 +1,4 @@
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 import os
 from dotenv import load_dotenv
 
@@ -12,7 +11,7 @@ class Settings:
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     app_secret_key: str = os.getenv("APP_SECRET_KEY", "change-me-in-production")
-    chroma_persist_dir: str = os.getenv("CHROMA_PERSIST_DIR", "./data")
+    database_url: str = os.getenv("DATABASE_URL", "postgresql://localhost:5432/semantic_search")
     embedding_dimensions: int = int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
     redirect_uri: str = os.getenv("REDIRECT_URI", "http://localhost:8000/auth/callback")
     max_image_size: int = 20 * 1024 * 1024  # 20MB

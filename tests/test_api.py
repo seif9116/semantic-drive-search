@@ -1,13 +1,20 @@
 from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
-from backend.main import app, _extract_folder_id
+from backend.main import _extract_folder_id
 
 
 @pytest.fixture
 def client():
-    with TestClient(app) as c:
-        yield c
+    with patch("backend.main.vs.VectorStore") as mock_vs:
+        mock_store = MagicMock()
+        mock_store.get_file_count.return_value = 0
+        mock_store.list_folders.return_value = []
+        mock_vs.return_value = mock_store
+
+        from backend.main import app
+        with TestClient(app) as c:
+            yield c
 
 
 def test_extract_folder_id_url():

@@ -8,3 +8,4 @@ def test_default_settings():
     assert "image/jpeg" in s.supported_image_types
     assert "video/mp4" in s.supported_video_types
     assert len(s.supported_media_types) == len(s.supported_image_types) + len(s.supported_video_types)
+    assert "postgresql" in s.database_url

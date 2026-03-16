@@ -22,9 +22,8 @@ indexing_status: dict = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global store
-    Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
     store = vs.VectorStore(
-        persist_dir=settings.chroma_persist_dir,
+        database_url=settings.database_url,
         dimensions=settings.embedding_dimensions,
     )
     yield
