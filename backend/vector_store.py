@@ -115,6 +115,23 @@ class VectorStore:
             ).fetchone()
             return row is not None
 
+    def get_all_embeddings(self, folder_id: str) -> list[dict]:
+        """Return all file_id, name, mime_type, and embedding for a folder."""
+        with self._get_conn() as conn:
+            rows = conn.execute(
+                "SELECT file_id, name, mime_type, embedding FROM embeddings WHERE folder_id = %s",
+                (folder_id,),
+            ).fetchall()
+        return [
+            {
+                "file_id": row[0],
+                "name": row[1],
+                "mime_type": row[2],
+                "embedding": list(row[3]),
+            }
+            for row in rows
+        ]
+
     def list_folders(self) -> list[str]:
         with self._get_conn() as conn:
             rows = conn.execute(
