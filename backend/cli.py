@@ -493,7 +493,7 @@ def _run_setup() -> None:
     api_ok = _check_connection("Gemini API", lambda: _test_gemini(updated.get("GOOGLE_API_KEY", "")))
 
     # Check OAuth token
-    token_path = Path("token.json")
+    token_path = SDS_DIR / "token.json"
     has_token = token_path.exists()
     if has_token:
         console.print(f"  [green]✓[/] Google Drive token found")
@@ -710,7 +710,7 @@ def _cmd_status() -> None:
         table.add_row(icon, label, display)
 
     # Check token
-    token_path = Path("token.json")
+    token_path = SDS_DIR / "token.json"
     has_token = token_path.exists()
     icon = "[green]✓[/]" if has_token else "[yellow]![/]"
     token_display = "[green]authorized[/]" if has_token else "[yellow]run `sds auth`[/]"

@@ -4,6 +4,9 @@ from googleapiclient.http import MediaIoBaseDownload
 from google.oauth2.credentials import Credentials
 from backend.config import settings
 
+# Shared Drive params — required for Google Workspace accounts
+_SHARED = {"supportsAllDrives": True, "includeItemsFromAllDrives": True}
+
 
 def get_drive_service(creds: Credentials):
     return build("drive", "v3", credentials=creds)
@@ -27,9 +30,11 @@ def list_media_files(creds: Credentials, folder_id: str) -> list[dict]:
         response = service.files().list(
             q=query,
             spaces="drive",
+            corpora="allDrives",
             fields="nextPageToken, files(id, name, mimeType, size, createdTime, thumbnailLink)",
             pageToken=page_token,
             pageSize=100,
+            **_SHARED,
         ).execute()
 
         files = response.get("files", [])
@@ -63,9 +68,11 @@ def list_media_files(creds: Credentials, folder_id: str) -> list[dict]:
         response = service.files().list(
             q=subfolder_query,
             spaces="drive",
+            corpora="allDrives",
             fields="nextPageToken, files(id)",
             pageToken=page_token,
             pageSize=100,
+            **_SHARED,
         ).execute()
 
         for subfolder in response.get("files", []):
@@ -81,7 +88,7 @@ def list_media_files(creds: Credentials, folder_id: str) -> list[dict]:
 def download_file(creds: Credentials, file_id: str) -> bytes:
     """Download a file's content from Drive."""
     service = get_drive_service(creds)
-    request = service.files().get_media(fileId=file_id)
+    request = service.files().get_media(fileId=file_id, **_SHARED)
     buffer = io.BytesIO()
     downloader = MediaIoBaseDownload(buffer, request)
 
@@ -102,6 +109,7 @@ def create_folder(creds: Credentials, name: str, parent_id: str) -> str:
             "parents": [parent_id],
         },
         fields="id",
+        **_SHARED,
     ).execute()
     return folder["id"]
 
@@ -109,7 +117,7 @@ def create_folder(creds: Credentials, name: str, parent_id: str) -> str:
 def get_file_parents(creds: Credentials, file_id: str) -> list[str]:
     """Return the parent folder IDs for a file."""
     service = get_drive_service(creds)
-    f = service.files().get(fileId=file_id, fields="parents").execute()
+    f = service.files().get(fileId=file_id, fields="parents", **_SHARED).execute()
     return f.get("parents", [])
 
 
@@ -121,11 +129,12 @@ def move_file(creds: Credentials, file_id: str, new_parent_id: str, old_parent_i
         addParents=new_parent_id,
         removeParents=old_parent_id,
         fields="id, parents",
+        **_SHARED,
     ).execute()
 
 
 def get_folder_name(creds: Credentials, folder_id: str) -> str:
     """Get the name of a Drive folder."""
     service = get_drive_service(creds)
-    folder = service.files().get(fileId=folder_id, fields="name").execute()
+    folder = service.files().get(fileId=folder_id, fields="name", **_SHARED).execute()
     return folder.get("name", folder_id)

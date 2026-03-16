@@ -5,7 +5,8 @@ from google.auth.transport.requests import Request
 from backend.config import settings
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
-TOKEN_PATH = Path("token.json")
+SDS_DIR = Path.home() / ".sds"
+TOKEN_PATH = SDS_DIR / "token.json"
 
 # Store the active flow so the same instance (with code_verifier) is used
 # for both authorization URL generation and token exchange.
@@ -65,6 +66,7 @@ def get_credentials() -> Credentials | None:
 
 
 def _save_token(creds: Credentials):
+    SDS_DIR.mkdir(parents=True, exist_ok=True)
     TOKEN_PATH.write_text(creds.to_json())
 
 
