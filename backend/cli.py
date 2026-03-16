@@ -907,6 +907,54 @@ def get_url(
     typer.echo(DRIVE_FILE_URL.format(file_id=file_id))
 
 
+# ── Browse command ─────────────────────────────────────────────────────────────
+
+@app.command()
+def browse(
+    folder_id: str = typer.Argument(..., help="Google Drive folder ID or URL to browse."),
+    file_type: str = typer.Option("all", "--type", "-t", help="Filter: 'all', 'images', or 'videos'."),
+) -> None:
+    """List all images and videos in a Google Drive folder (no indexing needed)."""
+    from backend.config import settings
+    from backend import auth as auth_module, drive
+
+    folder_id = _extract_folder_id(folder_id)
+
+    creds = auth_module.get_credentials()
+    if creds is None:
+        typer.echo(json.dumps({"error": "Not authenticated. Run `sds auth` first."}))
+        raise typer.Exit(1)
+
+    try:
+        files = drive.list_media_files(creds, folder_id)
+    except Exception as e:
+        typer.echo(json.dumps({"error": f"Failed to list files: {e}"}))
+        raise typer.Exit(1)
+
+    if file_type == "images":
+        files = [f for f in files if f["mimeType"].startswith("image/")]
+    elif file_type == "videos":
+        files = [f for f in files if f["mimeType"].startswith("video/")]
+
+    results = [
+        {
+            "file_id": f["id"],
+            "name": f["name"],
+            "mime_type": f["mimeType"],
+            "size_mb": round(f["size"] / (1024 * 1024), 2) if f["size"] else 0,
+            "created": f.get("createdTime", ""),
+            "drive_url": DRIVE_FILE_URL.format(file_id=f["id"]),
+        }
+        for f in files
+    ]
+
+    typer.echo(json.dumps({
+        "folder_id": folder_id,
+        "total_files": len(results),
+        "files": results,
+    }, indent=2))
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _extract_folder_id(folder_input: str) -> str:

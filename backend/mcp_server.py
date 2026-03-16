@@ -218,6 +218,51 @@ def get_image_url(file_id: str) -> str:
     return DRIVE_FILE_URL.format(file_id=file_id)
 
 
+@mcp.tool()
+def browse_drive(folder_id: str, file_type: str = "all") -> str:
+    """Browse all images and videos in a Google Drive folder without indexing.
+
+    Lists the files directly from Drive. Useful for seeing what's in a folder
+    before deciding to index it, or when you just need to find a file by name.
+
+    Args:
+        folder_id: Google Drive folder ID or full folder URL.
+        file_type: Filter results: 'all', 'images', or 'videos'.
+
+    Returns:
+        JSON with folder_id, total file count, and list of files with
+        file_id, name, mime_type, size, created time, and drive_url.
+    """
+    folder_id = _extract_folder_id(folder_id)
+
+    creds = auth.get_credentials()
+    if creds is None:
+        return json.dumps({"error": "Not authenticated. Run `sds auth` first."})
+
+    try:
+        files = drive.list_media_files(creds, folder_id)
+    except Exception as e:
+        return json.dumps({"error": f"Failed to list files: {e}"})
+
+    if file_type == "images":
+        files = [f for f in files if f["mimeType"].startswith("image/")]
+    elif file_type == "videos":
+        files = [f for f in files if f["mimeType"].startswith("video/")]
+
+    results = [
+        {
+            "file_id": f["id"],
+            "name": f["name"],
+            "mime_type": f["mimeType"],
+            "size_mb": round(f.get("size", 0) / (1024 * 1024), 2),
+            "drive_url": DRIVE_FILE_URL.format(file_id=f["id"]),
+        }
+        for f in files
+    ]
+
+    return json.dumps({"folder_id": folder_id, "total_files": len(results), "files": results}, indent=2)
+
+
 def main():
     mcp.run()
 

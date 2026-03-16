@@ -27,10 +27,16 @@ async def lifespan(app: FastAPI):
             database_url=settings.database_url,
             dimensions=settings.embedding_dimensions,
         )
-    except Exception:
+    except Exception as e:
         # Allow app to start without DB (needed for OAuth-only mode)
+        print(f"Warning: Could not connect to database ({e}). Search/indexing disabled, OAuth still works.")
         store = None
     yield
+
+
+def _require_store():
+    if store is None:
+        raise HTTPException(status_code=503, detail="Database not connected. Check DATABASE_URL in your config.")
 
 
 app = FastAPI(title="Semantic Drive Search", lifespan=lifespan)
@@ -82,6 +88,7 @@ async def logout():
 
 @app.post("/api/index")
 async def start_indexing(req: IndexRequest):
+    _require_store()
     creds = auth.get_credentials()
     if not creds:
         raise HTTPException(status_code=401, detail="Not authenticated with Google Drive")
@@ -107,6 +114,7 @@ async def start_indexing(req: IndexRequest):
 
 @app.get("/api/index/status/{folder_id}")
 async def get_index_status(folder_id: str):
+    _require_store()
     folder_id = _extract_folder_id(folder_id)
     status = indexing_status.get(folder_id)
     if not status:
@@ -141,6 +149,7 @@ async def index_status_stream(folder_id: str):
 
 @app.get("/api/folders")
 async def list_folders():
+    _require_store()
     folder_ids = store.list_folders()
     creds = auth.get_credentials()
     folders = []
@@ -162,6 +171,7 @@ async def list_folders():
 
 @app.delete("/api/folders/{folder_id}")
 async def delete_folder(folder_id: str):
+    _require_store()
     folder_id = _extract_folder_id(folder_id)
     store.delete_folder(folder_id)
     indexing_status.pop(folder_id, None)
@@ -177,6 +187,7 @@ async def search(
     folder_id: str = Query(...),
     limit: int = Query(default=20, ge=1, le=100),
 ):
+    _require_store()
     folder_id = _extract_folder_id(folder_id)
     creds = auth.get_credentials()
     if not creds:
@@ -204,6 +215,36 @@ async def search(
     ]
 
     return SearchResponse(query=q, results=results)
+
+
+# --- Browse Routes ---
+
+
+@app.get("/api/browse/{folder_id}")
+async def browse_folder(folder_id: str):
+    creds = auth.get_credentials()
+    if not creds:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    folder_id = _extract_folder_id(folder_id)
+    try:
+        files = drive.list_media_files(creds, folder_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to list files: {e}")
+    return {
+        "folder_id": folder_id,
+        "total_files": len(files),
+        "files": [
+            {
+                "file_id": f["id"],
+                "name": f["name"],
+                "mime_type": f["mimeType"],
+                "size": f["size"],
+                "created_time": f.get("createdTime", ""),
+                "thumbnail_url": f"/api/media/{f['id']}/thumbnail",
+            }
+            for f in files
+        ],
+    }
 
 
 # --- Media Proxy Routes ---
