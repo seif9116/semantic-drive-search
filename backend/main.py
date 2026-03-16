@@ -22,10 +22,14 @@ indexing_status: dict = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global store
-    store = vs.VectorStore(
-        database_url=settings.database_url,
-        dimensions=settings.embedding_dimensions,
-    )
+    try:
+        store = vs.VectorStore(
+            database_url=settings.database_url,
+            dimensions=settings.embedding_dimensions,
+        )
+    except Exception:
+        # Allow app to start without DB (needed for OAuth-only mode)
+        store = None
     yield
 
 

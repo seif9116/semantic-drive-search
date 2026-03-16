@@ -99,6 +99,142 @@ def _mask(value: str) -> str:
     return value[:4] + "[dim]" + "*" * (len(value) - 8) + "[/]" + value[-4:]
 
 
+def _detect_platform() -> str:
+    """Detect the OS platform."""
+    import platform as plat
+    system = plat.system().lower()
+    if system == "darwin":
+        return "mac"
+    if system == "linux":
+        # Check for Ubuntu/Debian
+        try:
+            with open("/etc/os-release") as f:
+                content = f.read().lower()
+                if "ubuntu" in content or "debian" in content:
+                    return "ubuntu"
+        except FileNotFoundError:
+            pass
+        return "linux"
+    return "other"
+
+
+def _detect_postgres() -> str:
+    """Check if PostgreSQL is installed and running. Returns 'running', 'installed', or 'missing'."""
+    import subprocess
+    # Check if psql exists
+    try:
+        subprocess.run(["psql", "--version"], capture_output=True, timeout=5)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return "missing"
+    # Check if the server is accepting connections
+    try:
+        result = subprocess.run(
+            ["pg_isready"], capture_output=True, timeout=5, text=True,
+        )
+        if result.returncode == 0:
+            return "running"
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return "installed"
+
+
+def _install_postgres_ubuntu() -> None:
+    """Install PostgreSQL 16 + pgvector on Ubuntu/Debian."""
+    import subprocess
+    commands = [
+        ("Adding PostgreSQL apt repository...", [
+            "sudo", "sh", "-c",
+            'apt-get install -y curl ca-certificates > /dev/null 2>&1 && '
+            'install -d /usr/share/postgresql-common/pgdg && '
+            'curl -so /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc '
+            'https://www.postgresql.org/media/keys/ACCC4CF8.asc && '
+            'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] '
+            'https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" '
+            '> /etc/apt/sources.list.d/pgdg.list && '
+            'apt-get update > /dev/null 2>&1',
+        ]),
+        ("Installing PostgreSQL 16 + pgvector...", [
+            "sudo", "apt-get", "install", "-y",
+            "postgresql-16", "postgresql-16-pgvector",
+        ]),
+    ]
+    for label, cmd in commands:
+        console.print(f"  [dim]{label}[/]")
+        result = subprocess.run(cmd, capture_output=False)
+        if result.returncode != 0:
+            console.print(f"  [red]✗[/] Failed. Run manually and retry [bold]sds setup[/].")
+            return
+
+    console.print(f"  [green]✓[/] PostgreSQL 16 + pgvector installed")
+    _ensure_database()
+
+
+def _install_postgres_mac() -> None:
+    """Install PostgreSQL + pgvector on macOS via Homebrew."""
+    import subprocess
+    commands = [
+        ("Installing PostgreSQL + pgvector via Homebrew...", [
+            "brew", "install", "postgresql@16", "pgvector",
+        ]),
+        ("Starting PostgreSQL...", [
+            "brew", "services", "start", "postgresql@16",
+        ]),
+    ]
+    for label, cmd in commands:
+        console.print(f"  [dim]{label}[/]")
+        result = subprocess.run(cmd)
+        if result.returncode != 0:
+            console.print(f"  [red]✗[/] Failed. Run manually and retry [bold]sds setup[/].")
+            return
+
+    console.print(f"  [green]✓[/] PostgreSQL + pgvector installed and running")
+    time.sleep(2)  # Give PG a moment to start
+    _ensure_database()
+
+
+def _ensure_database() -> None:
+    """Check if the semantic_search database exists, create it if not."""
+    import subprocess
+    import getpass
+    username = getpass.getuser()
+
+    # Ensure user has a postgres role
+    subprocess.run(
+        ["sudo", "-u", "postgres", "createuser", "--superuser", username],
+        capture_output=True,
+    )
+
+    # Check if database exists
+    result = subprocess.run(
+        ["psql", "-lqt"], capture_output=True, text=True, timeout=5,
+    )
+    if result.returncode == 0 and "semantic_search" in result.stdout:
+        console.print(f"  [green]✓[/] Database [bold]semantic_search[/] exists")
+        return
+
+    # Create it
+    console.print(f"  [dim]Creating database semantic_search...[/]")
+    result = subprocess.run(
+        ["createdb", "semantic_search"], capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        console.print(f"  [green]✓[/] Database [bold]semantic_search[/] created")
+    else:
+        # Try with sudo -u postgres
+        result = subprocess.run(
+            ["sudo", "-u", "postgres", "createdb", "semantic_search"],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            console.print(f"  [green]✓[/] Database [bold]semantic_search[/] created")
+        else:
+            console.print(f"  [yellow]![/] Could not create database automatically")
+            console.print()
+            console.print("  Run this manually:")
+            console.print()
+            console.print("  [bold white on grey23] sudo -u postgres createdb semantic_search [/]")
+
+
 def _prompt_field(label: str, hint: str, current: str = "", secret: bool = False, required: bool = True) -> str:
     """Prompt for a single field with nice formatting."""
     console.print()
@@ -235,18 +371,69 @@ def _run_setup() -> None:
 
     # ── Step 3: PostgreSQL ────────────────────────────────────────────────
     console.print()
-    console.print(Panel(
-        "[bold]You need PostgreSQL with the pgvector extension.[/]\n\n"
-        "  [bold]Install pgvector:[/]\n"
-        "    [dim]Ubuntu:[/]  sudo apt install postgresql-16-pgvector\n"
-        "    [dim]Mac:[/]     brew install pgvector\n\n"
-        "  [bold]Create the database:[/]\n"
-        "    createdb semantic_search",
-        title="[bold cyan] Step 3 · PostgreSQL + pgvector [/]",
-        border_style="cyan",
-        padding=(1, 2),
-    ))
+    pg_status = _detect_postgres()
 
+    if pg_status == "missing":
+        platform = _detect_platform()
+        if platform == "ubuntu":
+            console.print(Panel(
+                "[bold]PostgreSQL with pgvector is not installed.[/]\n\n"
+                "  I can install it for you. This will run:\n\n"
+                "  [bold white on grey23] sudo apt install -y postgresql-16 postgresql-16-pgvector [/]\n\n"
+                "  [dim]Requires the PostgreSQL apt repo (added automatically if missing).[/]",
+                title="[bold cyan] Step 3 · PostgreSQL + pgvector [/]",
+                border_style="cyan",
+                padding=(1, 2),
+            ))
+            install = Prompt.ask(
+                "  [bold cyan]Install PostgreSQL now?[/] [dim](Y/n)[/]",
+                default="y", console=console, show_default=False,
+            )
+            if install.lower() in ("y", "yes", ""):
+                _install_postgres_ubuntu()
+        elif platform == "mac":
+            console.print(Panel(
+                "[bold]PostgreSQL with pgvector is not installed.[/]\n\n"
+                "  I can install it for you. This will run:\n\n"
+                "  [bold white on grey23] brew install postgresql@16 pgvector [/]\n\n"
+                "  [bold white on grey23] brew services start postgresql@16 [/]",
+                title="[bold cyan] Step 3 · PostgreSQL + pgvector [/]",
+                border_style="cyan",
+                padding=(1, 2),
+            ))
+            install = Prompt.ask(
+                "  [bold cyan]Install PostgreSQL now?[/] [dim](Y/n)[/]",
+                default="y", console=console, show_default=False,
+            )
+            if install.lower() in ("y", "yes", ""):
+                _install_postgres_mac()
+        else:
+            console.print(Panel(
+                "[bold]PostgreSQL with pgvector is required.[/]\n\n"
+                "  Install PostgreSQL and pgvector for your platform, then\n"
+                "  create a database:\n\n"
+                "  [bold white on grey23] createdb semantic_search [/]",
+                title="[bold cyan] Step 3 · PostgreSQL + pgvector [/]",
+                border_style="cyan",
+                padding=(1, 2),
+            ))
+    elif pg_status == "running":
+        console.print(f"  [green]✓[/] PostgreSQL is already running")
+        # Check if database exists, offer to create it
+        _ensure_database()
+    else:
+        console.print(f"  [yellow]![/] PostgreSQL is installed but may not be running")
+        console.print(Panel(
+            "  Start PostgreSQL:\n\n"
+            "  [bold white on grey23] sudo systemctl start postgresql [/]\n\n"
+            "  Then create the database:\n\n"
+            "  [bold white on grey23] sudo -u postgres createdb semantic_search [/]",
+            title="[bold cyan] Step 3 · PostgreSQL + pgvector [/]",
+            border_style="cyan",
+            padding=(1, 2),
+        ))
+
+    console.print()
     val = _prompt_field(
         "Database URL",
         "e.g. postgresql://user:pass@localhost:5432/semantic_search",
