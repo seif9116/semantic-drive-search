@@ -351,6 +351,53 @@ def index(
     typer.echo(json.dumps(summary, indent=2))
 
 
+# ── Organize command ──────────────────────────────────────────────────────────
+
+@app.command()
+def organize(
+    folder_id: str = typer.Argument(..., help="Google Drive folder ID or URL to organize."),
+    mode: str = typer.Option("semantic", "--mode", "-m", help="Organization strategy: 'date' or 'semantic'."),
+    clusters: int = typer.Option(10, "--clusters", "-k", help="Number of clusters (semantic mode only)."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview the proposed organization without moving any files."),
+) -> None:
+    """Organize a Drive folder using unsupervised learning.
+
+    \b
+    Modes:
+      date      Group files into 'YYYY - Month' subfolders using Drive upload date.
+      semantic  Cluster the embedding space with k-means, name each cluster with
+                Gemini vision, then move files into the named subfolders.
+
+    \b
+    Examples:
+      sds organize FOLDER_ID --mode date --dry-run
+      sds organize FOLDER_ID --mode semantic --clusters 8
+      sds organize FOLDER_ID --mode semantic --dry-run
+    """
+    from backend import auth, organizer
+
+    folder_id = _extract_folder_id(folder_id)
+
+    if mode not in ("date", "semantic"):
+        typer.echo(json.dumps({"error": "Invalid mode. Choose 'date' or 'semantic'."}))
+        raise typer.Exit(1)
+
+    creds = auth.get_credentials()
+    if creds is None:
+        typer.echo(json.dumps({
+            "error": "Not authenticated with Google Drive. "
+                     "Run the web app and complete OAuth login to create token.json."
+        }))
+        raise typer.Exit(1)
+
+    if mode == "date":
+        result = organizer.organize_by_date(creds, folder_id, dry_run=dry_run)
+    else:
+        result = organizer.organize_semantic(creds, folder_id, k=clusters, dry_run=dry_run)
+
+    typer.echo(json.dumps(result, indent=2))
+
+
 # ── Get-url command ────────────────────────────────────────────────────────────
 
 @app.command(name="get-url")

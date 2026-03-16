@@ -92,6 +92,38 @@ def download_file(creds: Credentials, file_id: str) -> bytes:
     return buffer.getvalue()
 
 
+def create_folder(creds: Credentials, name: str, parent_id: str) -> str:
+    """Create a subfolder inside parent_id and return its new folder ID."""
+    service = get_drive_service(creds)
+    folder = service.files().create(
+        body={
+            "name": name,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [parent_id],
+        },
+        fields="id",
+    ).execute()
+    return folder["id"]
+
+
+def get_file_parents(creds: Credentials, file_id: str) -> list[str]:
+    """Return the parent folder IDs for a file."""
+    service = get_drive_service(creds)
+    f = service.files().get(fileId=file_id, fields="parents").execute()
+    return f.get("parents", [])
+
+
+def move_file(creds: Credentials, file_id: str, new_parent_id: str, old_parent_id: str) -> None:
+    """Move a file to new_parent_id, removing it from old_parent_id."""
+    service = get_drive_service(creds)
+    service.files().update(
+        fileId=file_id,
+        addParents=new_parent_id,
+        removeParents=old_parent_id,
+        fields="id, parents",
+    ).execute()
+
+
 def get_folder_name(creds: Credentials, folder_id: str) -> str:
     """Get the name of a Drive folder."""
     service = get_drive_service(creds)
