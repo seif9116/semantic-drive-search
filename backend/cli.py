@@ -277,24 +277,37 @@ def _run_setup() -> None:
     else:
         console.print(f"  [yellow]![/] Google Drive — needs OAuth login [dim](one-time)[/]")
 
-    # ── Next steps ────────────────────────────────────────────────────────
+    # ── Step 4: Google Drive OAuth (automatic) ─────────────────────────
     console.print()
 
-    if not has_token:
+    if not has_token and updated.get("GOOGLE_CLIENT_ID") and updated.get("GOOGLE_CLIENT_SECRET"):
         console.print(Panel(
-            "[bold]Complete Google Drive authorization:[/]\n\n"
-            "  [bold cyan]1.[/] Start the web server:\n"
-            "     [bold]sds auth[/]\n\n"
-            "  [bold cyan]2.[/] It will open your browser automatically.\n"
-            "     Sign in and allow access to your Drive.\n\n"
-            "  [bold cyan]3.[/] After authorization, you can close the server.\n\n"
-            "[dim]This creates a token.json file for offline access.\n"
-            "You only need to do this once.[/]",
-            title="[bold yellow] Action Required [/]",
-            border_style="yellow",
+            "[bold]Connecting to Google Drive...[/]\n\n"
+            "  Your browser will open automatically.\n"
+            "  Sign in with Google and allow Drive access.\n\n"
+            "[dim]This is a one-time authorization. Your token is stored locally.[/]",
+            title="[bold cyan] Step 4 · Google Drive Authorization [/]",
+            border_style="cyan",
             padding=(1, 2),
         ))
-    else:
+        console.print()
+
+        proceed = Prompt.ask(
+            "  [bold cyan]Ready to authorize?[/] [dim](Y/n)[/]",
+            default="y",
+            console=console,
+            show_default=False,
+        )
+        if proceed.lower() in ("y", "yes", ""):
+            _run_oauth_flow()
+            has_token = Path("token.json").exists()
+    elif has_token:
+        console.print(f"  [green]✓[/] Google Drive already authorized")
+
+    # ── Done ─────────────────────────────────────────────────────────────
+    console.print()
+
+    if has_token and db_ok and api_ok:
         console.print(Panel(
             "[bold]You're all set! Try these:[/]\n\n"
             "  [bold cyan]sds index[/] [dim]<folder_url>[/]      Index a Drive folder\n"
@@ -303,6 +316,20 @@ def _run_setup() -> None:
             "  [bold cyan]sds status[/]                    Check configuration",
             title="[bold green] Ready [/]",
             border_style="green",
+            padding=(1, 2),
+        ))
+    else:
+        issues = []
+        if not db_ok:
+            issues.append("  [yellow]•[/] Fix PostgreSQL connection, then run [bold]sds setup[/]")
+        if not api_ok:
+            issues.append("  [yellow]•[/] Fix Gemini API key, then run [bold]sds setup[/]")
+        if not has_token:
+            issues.append("  [yellow]•[/] Run [bold]sds auth[/] to authorize Google Drive")
+        console.print(Panel(
+            "[bold]Almost there — fix these to finish:[/]\n\n" + "\n".join(issues),
+            title="[bold yellow] Remaining Steps [/]",
+            border_style="yellow",
             padding=(1, 2),
         ))
     console.print()
@@ -322,6 +349,51 @@ def _test_gemini(api_key: str) -> None:
     client.models.list()
 
 
+def _run_oauth_flow() -> None:
+    """Start a temp server, open browser for OAuth, wait for token, exit."""
+    import threading
+    import uvicorn
+    from backend.main import app as fastapi_app
+    from backend import auth as auth_module
+
+    console.print("  [bold]Starting OAuth server...[/]")
+    console.print()
+    console.print("  [cyan]→[/] Opening browser for Google sign-in...")
+    console.print("  [dim]  Sign in and allow Drive access. This will complete automatically.[/]")
+    console.print()
+
+    def _open_browser():
+        time.sleep(1.5)
+        webbrowser.open("http://localhost:8000/auth/login")
+
+    threading.Thread(target=_open_browser, daemon=True).start()
+
+    _got_token = threading.Event()
+    original_exchange = auth_module.exchange_code
+
+    def _patched_exchange(code):
+        result = original_exchange(code)
+        _got_token.set()
+        return result
+
+    auth_module.exchange_code = _patched_exchange
+
+    def _watch_for_token():
+        _got_token.wait()
+        time.sleep(1)
+        console.print("  [green]✓[/] Google Drive authorized successfully!")
+        console.print()
+        import os
+        os._exit(0)
+
+    threading.Thread(target=_watch_for_token, daemon=True).start()
+
+    try:
+        uvicorn.run(fastapi_app, host="127.0.0.1", port=8000, log_level="error")
+    except KeyboardInterrupt:
+        pass
+
+
 @app.command()
 def setup() -> None:
     """Run the interactive setup wizard to configure API keys and database."""
@@ -338,7 +410,6 @@ def setup() -> None:
 @app.command()
 def auth() -> None:
     """Launch a temporary server to complete Google Drive OAuth login."""
-    import threading
     from backend.config import settings
 
     if not settings.google_client_id or not settings.google_client_secret:
@@ -348,57 +419,7 @@ def auth() -> None:
         raise typer.Exit(1)
 
     console.print()
-    console.print("  [bold]Starting OAuth server...[/]")
-    console.print()
-    console.print("  [cyan]→[/] Opening [link=http://localhost:8000/auth/login]http://localhost:8000/auth/login[/link] in your browser")
-    console.print("  [dim]  Sign in and allow Drive access. This window will close automatically.[/]")
-    console.print()
-
-    # Open browser after a short delay
-    def _open_browser():
-        time.sleep(1.5)
-        webbrowser.open("http://localhost:8000/auth/login")
-
-    threading.Thread(target=_open_browser, daemon=True).start()
-
-    # Run the server — it will serve the OAuth callback
-    import uvicorn
-    from backend.main import app as fastapi_app
-
-    # Monkey-patch the callback to stop the server after auth
-    from backend.main import auth_callback as _original_callback
-    from backend import auth as auth_module
-
-    class _ShutdownAfterAuth(Exception):
-        pass
-
-    _got_token = threading.Event()
-
-    original_exchange = auth_module.exchange_code
-
-    def _patched_exchange(code):
-        result = original_exchange(code)
-        _got_token.set()
-        return result
-
-    auth_module.exchange_code = _patched_exchange
-
-    def _watch_for_token():
-        _got_token.wait()
-        time.sleep(1)
-        console.print()
-        console.print("  [green]✓[/] Google Drive authorized successfully!")
-        console.print("  [dim]  Token saved. You can now close this server (Ctrl+C).[/]")
-        console.print()
-        import os
-        os._exit(0)
-
-    threading.Thread(target=_watch_for_token, daemon=True).start()
-
-    try:
-        uvicorn.run(fastapi_app, host="127.0.0.1", port=8000, log_level="error")
-    except KeyboardInterrupt:
-        pass
+    _run_oauth_flow()
 
 
 # ── Status command ─────────────────────────────────────────────────────────────
