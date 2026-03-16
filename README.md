@@ -116,6 +116,7 @@ Settings are loaded in priority order: `~/.sds/settings.json` → environment va
 | `sds index <folder_id>` | Index a new Google Drive folder |
 | `sds search <query> <folder_id>` | Search indexed images/videos with natural language |
 | `sds get-url <file_id>` | Get the Drive URL for a file ID |
+| `sds organize <folder_id>` | Organize a Drive folder by date or semantic clustering |
 
 ### Workflow
 
@@ -134,6 +135,21 @@ sds search "sunset over mountains" FOLDER_ID
 
 # 4. Get a shareable link
 sds get-url FILE_ID
+```
+
+### Organize a folder
+
+Automatically organize a Drive folder into subfolders:
+
+```bash
+# By date — groups files into "YYYY - Month" subfolders
+sds organize FOLDER_ID --mode date
+
+# By semantic similarity — k-means clustering + Gemini-named folders
+sds organize FOLDER_ID --mode semantic --clusters 8
+
+# Preview without moving files
+sds organize FOLDER_ID --mode semantic --dry-run
 ```
 
 ### Claude Code integration

@@ -93,6 +93,29 @@ sds get-url "<file_id>"
 
 **Returns:** A URL string like `https://drive.google.com/file/d/{file_id}/view`.
 
+### organize
+
+Organize a Google Drive folder into subfolders automatically.
+
+**Usage:**
+```bash
+sds organize "<folder_id>" [--mode date|semantic] [--clusters N] [--dry-run]
+```
+
+**Arguments:**
+- `folder_id` (required): Google Drive folder ID or URL.
+- `--mode` (optional, default "semantic"): `date` groups by upload month, `semantic` clusters by visual similarity using k-means.
+- `--clusters` (optional, default 10): Number of clusters (semantic mode only).
+- `--dry-run` (optional): Preview the proposed organization without moving files.
+
+**Examples:**
+```bash
+sds organize abc123 --mode date --dry-run
+sds organize abc123 --mode semantic --clusters 8
+```
+
+**Returns:** JSON with the proposed/executed grouping and file counts per folder.
+
 ## Workflow
 
 1. Run `sds list-folders` to see what folders are already available.
