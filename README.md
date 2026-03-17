@@ -151,21 +151,25 @@ sds organize FOLDER_ID --mode semantic --clusters 8
 sds organize FOLDER_ID --mode semantic --dry-run
 ```
 
-### Claude Code plugin
+### Claude Code skill
 
-This project is also a Claude Code plugin. Load it with:
+Install the `/sds` skill so Claude Code can search your Drive images in any project:
 
 ```bash
-claude --plugin-dir /path/to/semantic-drive-search
+# From a local clone
+./install-skill.sh
+
+# Or directly from GitHub
+curl -fsSL https://raw.githubusercontent.com/seif9116/semantic-drive-search/master/install-skill.sh | bash
 ```
 
-Or install permanently by adding to `~/.claude/settings.json`:
+This installs the skill to `~/.claude/skills/sds/`, registers the MCP server, and installs the `sds` CLI. After installation, restart Claude Code and type `/sds` to use it.
 
-```json
-{ "pluginDirs": ["/path/to/semantic-drive-search"] }
+You can also load the full plugin (includes sub-skills for each command):
+
+```bash
+claude plugin add /path/to/semantic-drive-search
 ```
-
-See [claude-skill.md](claude-skill.md) for full usage examples.
 
 ## REST API
 
